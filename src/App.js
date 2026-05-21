@@ -298,7 +298,7 @@ function Card({ item, onComplete, onEdit, onDelete, onMoveCtx, onMoveType, onTap
 
   return (
     <div onClick={() => !menuOpen && onTap(item)}
-      style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 15, padding: "11px 12px 10px 16px", position: "relative", opacity: item.done ? 0.44 : 1, overflow: "hidden", cursor: "pointer" }}>
+      style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 15, padding: "11px 12px 10px 16px", position: "relative", opacity: item.done ? 0.44 : 1, cursor: "pointer" }}>
       <div style={{ position: "absolute", left: 0, top: "12%", bottom: "12%", width: 3, borderRadius: "0 2px 2px 0", background: CTX[item.ctx]?.accent || "#ccc" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7, flexWrap: "wrap" }}>
         <span style={TAG_STYLE(CTX[item.ctx]?.bg, CTX[item.ctx]?.fg)}>{CTX[item.ctx]?.icon} {CTX[item.ctx]?.label}</span>
@@ -338,7 +338,7 @@ function HistCard({ item }) {
   const dl = deadlineInfo(item.deadline, item.time);
   const t = new Date(item.completedAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   return (
-    <div style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 14, padding: "10px 13px", opacity: 0.72, position: "relative", overflow: "hidden" }}>
+    <div style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 14, padding: "10px 13px", opacity: 0.72, position: "relative" }}>
       <div style={{ position: "absolute", left: 0, top: "12%", bottom: "12%", width: 3, borderRadius: "0 2px 2px 0", background: CTX[item.ctx]?.accent || "#ccc" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, flexWrap: "wrap" }}>
         <span style={TAG_STYLE(CTX[item.ctx]?.bg, CTX[item.ctx]?.fg)}>{CTX[item.ctx]?.icon} {CTX[item.ctx]?.label}</span>
