@@ -289,13 +289,11 @@ function Card({ item, onComplete, onEdit, onDelete, onMoveCtx, onMoveType, onTap
     setTimeout(() => { completing.current = false; }, 800);
   }
 
-  // texto truncado a 3 líneas en la tarjeta
+  // texto completo visible
   const textStyle = {
     fontSize: 14, lineHeight: 1.5, color: item.done ? "#a09890" : "#1a1814",
     marginBottom: 8, wordBreak: "break-word",
     textDecoration: item.done ? "line-through" : "none",
-    display: "-webkit-box", WebkitLineClamp: 3,
-    WebkitBoxOrient: "vertical", overflow: "hidden",
   };
 
   return (
@@ -581,7 +579,7 @@ export default function App() {
   if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100dvh", background: "#f5f2ec", color: "#a09890", fontSize: 13 }}>Cargando…</div>;
 
   return (
-    <div style={{ fontFamily: "'Segoe UI',system-ui,sans-serif", background: "#f5f2ec", height: "100dvh", display: "flex", flexDirection: "column", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflow: "hidden" }}>
+    <div style={{ fontFamily: "'Segoe UI',system-ui,sans-serif", background: "#f5f2ec", height: "100dvh", display: "flex", flexDirection: "column", width: "100%", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflowX: "hidden" }}>
 
       {/* HEADER */}
       <div style={{ background: "#f5f2ec", padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 30, borderBottom: "1px solid #d8d2c6" }}>
