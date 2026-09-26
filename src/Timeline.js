@@ -1,16 +1,18 @@
 import { useEffect, useRef } from "react";
 import { BLOCK_TYPE, hhmm, toMinutes } from "./ui";
+import { placeTasks, blockDone } from "./plan";
 
 const PX = 1;           // píxeles por minuto (60 px por hora)
 const GUTTER = 44;      // columna de horas
 const PIN_H = 24;       // alto de una tarea con hora
 
 // Bloques ubicados en una escala de horas, tareas con hora como marcas y línea de "ahora".
-export default function Timeline({ blocks, tasks, isToday, onTapTask, onTapBlock }) {
+export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapTask, onTapBlock }) {
   const scroller = useRef(null);
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
+  const { inBlock } = placeTasks(blocks, tasks);
   const timed = tasks.filter(t => t.scheduled_time).sort((a, b) => a.scheduled_time.localeCompare(b.scheduled_time));
   const untimed = tasks.filter(t => !t.scheduled_time && !t.done).length;
 
@@ -66,6 +68,7 @@ export default function Timeline({ blocks, tasks, isToday, onTapTask, onTapBlock
               }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                 {t.icon} {b.label || t.label}
+                {b.block_type !== "ocio" && blockDone(b, inBlock[b.block_id], checkins) && <span style={{ color: "var(--good)", marginLeft: 6 }}>✓</span>}
               </span>
               {h >= 40 && (
                 <span style={{ fontFamily: "monospace", fontSize: 10, color: "var(--ink-2)" }}>

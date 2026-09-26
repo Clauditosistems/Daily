@@ -332,6 +332,29 @@ export async function fetchActivity(from) {
   return data;
 }
 
+// ─── "✓ ESTUVE" ──────────────────────────────────────────────
+// ids de bloques marcados como "estuve" ese día.
+export async function fetchCheckins(date) {
+  const { data, error } = await supabase.from("block_checkins").select("block_id").eq("day", date);
+  if (error) throw error;
+  return data.map(r => r.block_id);
+}
+
+export async function setCheckin(blockId, date, on) {
+  const { error } = on
+    ? await supabase.from("block_checkins").upsert({ block_id: blockId, day: date }, { onConflict: "user_id,block_id,day", ignoreDuplicates: true })
+    : await supabase.from("block_checkins").delete().eq("block_id", blockId).eq("day", date);
+  if (error) throw error;
+}
+
+// Días atípicos desde "from" (para mostrarlos neutros en el mapa de actividad).
+export async function fetchAtypicalDays(from) {
+  const { data, error } = await supabase.from("day_overrides").select("override_date")
+    .gte("override_date", from).eq("is_atypical", true);
+  if (error) throw error;
+  return data.map(r => r.override_date);
+}
+
 // ─── MIGRACIÓN DESDE INDEXEDDB ───────────────────────────────
 // Solo tareas (type "task") con fecha. Los adjuntos se ignoran.
 const CTX_TO_BLOCK_TYPE = { work: "trabajo", study: "estudio" };

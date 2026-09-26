@@ -12,6 +12,9 @@ export const BLOCK_TYPE = {
   otro:     { label: "Otro",     icon: "✦",  ...typeColor("otro") },
 };
 
+// Tipos que puede tener una tarea o rutina: el ocio es tiempo libre protegido, sin tareas.
+export const TASK_TYPES = Object.keys(BLOCK_TYPE).filter(k => k !== "ocio");
+
 export const PRIO = {
   high: { label: "Alta",  color: "var(--prio-high)" },
   mid:  { label: "Media", color: "var(--prio-mid)" },

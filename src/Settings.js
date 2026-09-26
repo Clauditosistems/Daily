@@ -70,7 +70,10 @@ function NotificationPrefs() {
   return (
     <div style={CARD}>
       <div style={{ fontWeight: 700, fontSize: 14 }}>Qué avisos querés</div>
-      <Toggle checked={prefs.notify_blocks} onChange={v => change("notify_blocks", v)} label="Al empezar cada bloque" hint="Con las tareas que tiene." />
+      <Toggle checked={prefs.notify_blocks} onChange={v => change("notify_blocks", v)} label="Al empezar cada bloque" hint="Con una tarea para arrancar." />
+      <Toggle checked={prefs.notify_midblock} onChange={v => change("notify_midblock", v)} label="A mitad de bloques largos" hint="Un empujoncito en bloques de más de 90 minutos." />
+      <Toggle checked={prefs.notify_ocio} onChange={v => change("notify_ocio", v)} label="Tiempo libre" hint="Cuando empieza y cuando termina el ocio." />
+      <Toggle checked={prefs.notify_dayclose} onChange={v => change("notify_dayclose", v)} label="Cierre del día" hint="Lo que hiciste y con qué arrancás mañana." />
       <Toggle checked={prefs.notify_tasks} onChange={v => change("notify_tasks", v)} label="A la hora de una tarea" hint="Solo las que tienen hora." />
       <Toggle checked={prefs.notify_birthdays} onChange={v => change("notify_birthdays", v)} label="Cumpleaños" />
       <Toggle checked={prefs.birthday_day_before} onChange={v => change("birthday_day_before", v)} disabled={!prefs.notify_birthdays}

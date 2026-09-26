@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchActivity } from "./supabase";
+import { fetchActivity, fetchAtypicalDays } from "./supabase";
 import { parseYmd, addDays, weekDates, todayStr } from "./ui";
 
 const WEEKS = 22;     // ~5 meses; entra en 360 px de ancho
@@ -22,11 +22,13 @@ export default function Heatmap() {
   const firstMonday = addDays(weekDates(today)[0], -7 * (WEEKS - 1));
   const [counts, setCounts] = useState(null);
   const [picked, setPicked] = useState(null);
+  const [atypical, setAtypical] = useState([]);
 
   useEffect(() => {
     fetchActivity(firstMonday)
       .then(rows => setCounts(Object.fromEntries(rows.map(r => [r.day, r.done]))))
       .catch(() => setCounts({}));
+    fetchAtypicalDays(firstMonday).then(setAtypical).catch(() => {});
   }, [firstMonday]);
 
   if (!counts) return null;
@@ -69,14 +71,15 @@ export default function Heatmap() {
               {days.map(d => {
                 const future = d > today;
                 const n = counts[d] || 0;
+                const neutral = atypical.includes(d) && !n;  // día atípico: ni hueco ni falla
                 return (
                   <button key={d} onClick={() => !future && setPicked(d)} disabled={future}
-                    title={future ? "" : `${fmt(d)} · ${n} hecha${n === 1 ? "" : "s"}`}
+                    title={future ? "" : neutral ? `${fmt(d)} · día atípico` : `${fmt(d)} · ${n} hecha${n === 1 ? "" : "s"}`}
                     aria-label={future ? undefined : `${fmt(d)}: ${n} tareas hechas`}
                     style={{
                       width: CELL, height: CELL, padding: 0, borderRadius: 3, cursor: future ? "default" : "pointer",
-                      background: future ? "transparent" : level(n),
-                      border: d === shown ? "1.5px solid var(--ink)" : "none",
+                      background: future || neutral ? "transparent" : level(n),
+                      border: d === shown ? "1.5px solid var(--ink)" : neutral ? "1px dashed var(--ink-3)" : "none",
                     }} />
                 );
               })}
@@ -87,7 +90,9 @@ export default function Heatmap() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
-          {fmt(shown)}: <b style={{ color: "var(--ink)" }}>{counts[shown] || 0}</b> hecha{counts[shown] === 1 ? "" : "s"}
+          {atypical.includes(shown) && !counts[shown]
+            ? <>{fmt(shown)}: día atípico ☾</>
+            : <>{fmt(shown)}: <b style={{ color: "var(--ink)" }}>{counts[shown] || 0}</b> hecha{counts[shown] === 1 ? "" : "s"}</>}
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)" }}>
           menos

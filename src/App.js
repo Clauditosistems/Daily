@@ -15,10 +15,15 @@ const TABS = [
   ["resumen",  "📊 Resumen"],
 ];
 
-// "/?view=resumen" (lo usa el push del domingo) abre directo esa pestaña.
+// "/?view=resumen" (push del domingo) o "/?view=agenda&mode=ahora" (avisos de bloque) abren esa vista.
 function viewFromUrl(url = window.location.href) {
   const v = new URL(url, window.location.origin).searchParams.get("view");
   return TABS.some(([id]) => id === v) ? v : "agenda";
+}
+
+function modeFromUrl(url = window.location.href, n = 0) {
+  const m = new URL(url, window.location.origin).searchParams.get("mode");
+  return m ? { mode: m, n } : null;
 }
 
 const SHELL = { fontFamily: "'Segoe UI',system-ui,sans-serif", background: "var(--bg)", color: "var(--ink)", height: "100dvh", display: "flex", flexDirection: "column", width: "100%", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflowX: "hidden" };
@@ -27,6 +32,7 @@ export default function App() {
   const [session, setSession] = useState(undefined);  // undefined = todavía no se sabe
   const [view, setView]       = useState(viewFromUrl);
   const [pushOff, setPushOff] = useState(false);
+  const [forceMode, setForceMode] = useState(() => modeFromUrl());
 
   useEffect(() => {
     registerSW();
@@ -36,7 +42,12 @@ export default function App() {
       if (event === "SIGNED_IN" && s) syncTimezone(s.user.id).catch(console.error);
     });
     // Tocar una notificación con la app abierta: el service worker avisa a qué vista ir.
-    const onMessage = e => { if (e.data?.type === "navigate") setView(viewFromUrl(e.data.url)); };
+    const onMessage = e => {
+      if (e.data?.type !== "navigate") return;
+      setView(viewFromUrl(e.data.url));
+      const m = modeFromUrl(e.data.url, Date.now());
+      if (m) setForceMode(m);
+    };
     navigator.serviceWorker?.addEventListener("message", onMessage);
     return () => {
       subscription.unsubscribe();
@@ -86,7 +97,7 @@ export default function App() {
       </div>
 
       {!session && <Login />}
-      {session && view === "agenda"  && <AgendaView />}
+      {session && view === "agenda"  && <AgendaView forceMode={forceMode} />}
       {session && view === "rutinas" && <RoutinesView />}
       {session && view === "resumen" && <SummaryView />}
       {session && view === "notas"   && <NotesView />}

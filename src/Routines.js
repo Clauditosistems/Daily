@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchRoutines, createRoutine, updateRoutine, deleteRoutine } from "./supabase";
 import {
-  BLOCK_TYPE, DAYS, PRIO, todayStr, hhmm,
+  BLOCK_TYPE, TASK_TYPES, DAYS, PRIO, todayStr, hhmm,
   FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, PrioPicker, DayPicker,
 } from "./ui";
 
@@ -51,7 +51,7 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
       </div>
       <div>
         <div style={LABEL}>Bloque</div>
-        <BlockTypePicker value={blockType} onChange={setBlockType} allowNone />
+        <BlockTypePicker value={blockType} onChange={setBlockType} allowNone types={TASK_TYPES} />
       </div>
       <div>
         <div style={LABEL}>Hora (opcional)</div>

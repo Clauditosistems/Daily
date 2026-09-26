@@ -62,13 +62,15 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
           const r = data[d];
           const inMonth = parseYmd(d).getMonth() === month;
           const isToday = d === today, isSelected = d === selected;
+          // Días pasados: solo lo hecho. Hoy y futuros: lo planificado, en neutro. Nada en rojo.
           const past = d < today;
-          const complete = r && past && r.done > 0 && r.pending === 0;
+          const planned = !past && r?.pending > 0 ? r.pending : 0;
+          const done = r && d <= today ? r.done : 0;
           const names = bdays[d] || [];
           const label = [
             parseYmd(d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" }),
-            r?.pending ? `${r.pending} pendientes` : null,
-            complete ? "todo hecho" : null,
+            planned ? `${planned} planificadas` : null,
+            done ? `${done} hechas` : null,
             r?.block_types.length ? r.block_types.map(k => BLOCK_TYPE[k]?.label).join(", ") : null,
             names.length ? `cumple de ${names.join(", ")}` : null,
             r?.notes ? `${r.notes} nota${r.notes === 1 ? "" : "s"}` : null,
@@ -86,8 +88,8 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
               <span style={{ fontSize: 12.5, fontWeight: isToday ? 800 : 600, lineHeight: 1 }}>{parseYmd(d).getDate()}</span>
               <TypeStrip types={r?.block_types || []} />
               <span style={{ display: "flex", alignItems: "center", gap: 1, fontSize: 9.5, lineHeight: 1, minHeight: 11, whiteSpace: "nowrap" }}>
-                {r?.pending > 0 && <span style={{ fontFamily: "monospace", fontWeight: 700, color: past ? "var(--bad)" : "var(--ink-2)" }}>{r.pending}</span>}
-                {complete && <span style={{ color: "var(--good)", fontWeight: 800 }}>✓</span>}
+                {done > 0 && <span style={{ fontFamily: "monospace", fontWeight: 800, color: "var(--good)" }}>✓{done}</span>}
+                {planned > 0 && done === 0 && <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--ink-3)" }}>{planned}</span>}
                 {names.length > 0 && <span>🎂</span>}
                 {r?.notes > 0 && <span>📝</span>}
                 {r?.atypical && <span>☾</span>}
@@ -109,7 +111,7 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
           </div>
         )}
         <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
-          Las rayitas son los bloques del día, siempre en el mismo orden. <b style={{ fontFamily: "monospace" }}>3</b> = pendientes · <span style={{ color: "var(--good)" }}>✓</span> = todo hecho · 🎂 cumple · 📝 nota · ☾ atípico. Tocá un día para abrirlo.
+          Las rayitas son los bloques del día, siempre en el mismo orden. <span style={{ color: "var(--good)", fontFamily: "monospace", fontWeight: 800 }}>✓4</span> = cosas hechas · <span style={{ fontFamily: "monospace" }}>3</span> = planificadas · 🎂 cumple · 📝 nota · ☾ atípico. Tocá un día para abrirlo.
         </div>
       </div>
     </div>

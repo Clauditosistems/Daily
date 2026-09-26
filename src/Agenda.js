@@ -1,36 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import MonthView from "./MonthView";
 import Timeline from "./Timeline";
+import NowView from "./Now";
+import { placeTasks, visibleTasks, blockDone, blockStarted, currentBlock, nowMinutes } from "./plan";
 import {
   fetchBlocksForDay, fetchTasksForDate, fetchPendingCounts, createTask, updateTask, deleteTask,
   fetchRoutines, ensureRoutineTasks, rolloverMine, fetchDayOverride, markAtypical, unmarkAtypical,
   fetchCancelledBlocks, setBlockOverride, clearBlockOverride,
-  makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays,
+  makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin,
 } from "./supabase";
 import {
-  BLOCK_TYPE, PRIO, PRIO_ORDER, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
-  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, SECTION, Sheet, BlockTypePicker, PrioPicker, DayPicker,
+  BLOCK_TYPE, TASK_TYPES, PRIO, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
+  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, SECTION, Sheet, BlockTypePicker, PrioPicker, DayPicker,
 } from "./ui";
-
-const byPriority = (a, b) =>
-  (a.done - b.done)
-  || ((a.scheduled_time || "99") < (b.scheduled_time || "99") ? -1 : (a.scheduled_time || "99") > (b.scheduled_time || "99") ? 1 : 0)
-  || (PRIO_ORDER[a.prio] - PRIO_ORDER[b.prio]) || a.created_at.localeCompare(b.created_at);
-
-// Una tarea va al bloque que tiene asignado; si no, al primer bloque del día de su mismo tipo.
-function placeTasks(blocks, tasks) {
-  const inBlock = Object.fromEntries(blocks.map(b => [b.block_id, []]));
-  const loose = [];
-  tasks.forEach(t => {
-    if (t.block_id && inBlock[t.block_id]) return inBlock[t.block_id].push(t);
-    const match = t.block_type && blocks.find(b => b.block_type === t.block_type);
-    if (match) return inBlock[match.block_id].push(t);
-    loose.push(t);
-  });
-  Object.values(inBlock).forEach(list => list.sort(byPriority));
-  loose.sort(byPriority);
-  return { inBlock, loose };
-}
 
 // ─── TIRA SEMANAL ────────────────────────────────────────────
 function WeekStrip({ selected, today, counts, onSelect }) {
@@ -78,15 +60,10 @@ function TaskRow({ task, onToggle, onTap, showType }) {
           )}
           {task.text}
         </span>
-        {(task.routine_id || task.rollover_count > 0 || (showType && t)) && (
+        {(task.routine_id || (showType && t)) && (
           <span style={{ display: "flex", gap: 8, fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)", marginTop: 2 }}>
             {showType && t && <span style={{ color: "var(--ink-2)" }}>{t.icon} {t.label}</span>}
             {task.routine_id && <span>🔁 rutina</span>}
-            {task.rollover_count > 0 && !task.done && (
-              <span style={{ color: task.rollover_count >= 3 ? "var(--bad)" : "var(--warn)", fontWeight: 700 }}>
-                ↻ pasó {task.rollover_count} {task.rollover_count === 1 ? "vez" : "veces"}
-              </span>
-            )}
           </span>
         )}
       </button>
@@ -94,7 +71,44 @@ function TaskRow({ task, onToggle, onTap, showType }) {
   );
 }
 
-function TaskSheet({ task, onSave, onDelete, onClose }) {
+// A partir de la tercera vez que una tarea pasa de día: partir, mover o soltar. Sin juicio.
+function StuckPrompt({ task, onSplit, onMove, onRelease }) {
+  const [step, setStep]   = useState(null);  // null | "split" | "move"
+  const [parts, setParts] = useState(["", ""]);
+  const [date, setDate]   = useState(addDays(task.assigned_date, 1));
+  const [busy, setBusy]   = useState(false);
+  const run = async fn => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
+  return (
+    <div style={{ background: "var(--hl-bg)", border: "1.5px solid var(--hl-border)", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>Esta viene quedando para después. ¿La partimos en algo más chico, la movemos a otro día, o la soltamos?</div>
+      {step === null && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setStep("split")} style={{ ...GHOST_BTN, flex: 1, padding: "9px 6px" }}>Partir</button>
+          <button onClick={() => setStep("move")} style={{ ...GHOST_BTN, flex: 1, padding: "9px 6px" }}>Mover</button>
+          <button onClick={() => run(onRelease)} disabled={busy} style={{ ...GHOST_BTN, flex: 1, padding: "9px 6px" }}>Soltar</button>
+        </div>
+      )}
+      {step === "split" && (
+        <>
+          {parts.map((v, i) => (
+            <input key={i} value={v} onChange={e => setParts(p => p.map((x, j) => j === i ? e.target.value : x))}
+              placeholder={i === 0 ? "Primer paso, algo chico" : "Lo que sigue"} style={{ ...FIELD, background: "var(--surface)" }} />
+          ))}
+          <button onClick={() => run(() => onSplit(parts.map(x => x.trim()).filter(Boolean)))} disabled={busy || !parts[0].trim()} style={PRIMARY_BTN}>Partir en tareas</button>
+        </>
+      )}
+      {step === "move" && (
+        <>
+          <input type="date" value={date} min={todayStr()} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", background: "var(--surface)" }} />
+          <button onClick={() => run(() => onMove(date))} disabled={busy || !date} style={PRIMARY_BTN}>Mover a ese día</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) {
   const isNew = !task.id;
   const [text, setText]           = useState(task.text || "");
   const [date, setDate]           = useState(task.assigned_date);
@@ -103,8 +117,19 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
   const [time, setTime]           = useState(hhmm(task.scheduled_time));
   const [repeat, setRepeat]       = useState(false);
   const [repeatDays, setRepeatDays] = useState(() => [parseYmd(task.assigned_date).getDay()]);
+  const [blockId, setBlockId]     = useState(task.block_id ?? null);
+  const [dayBlocks, setDayBlocks] = useState(initialBlocks || []);
   const [error, setError]         = useState("");
   const [busy, setBusy]           = useState(false);
+
+  // Bloques del día elegido, para poder atarla a uno puntual (aunque sea de otro tipo).
+  useEffect(() => {
+    if (date === task.assigned_date && initialBlocks) { setDayBlocks(initialBlocks); return; }
+    setBlockId(null);
+    if (!date) return;
+    fetchBlocksForDay(date).then(setDayBlocks).catch(() => setDayBlocks([]));
+  }, [date]);  // solo cuando cambia el día
+  const pickable = dayBlocks.filter(b => b.block_type !== "ocio");
 
   const toggleRepeatDay = d => setRepeatDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
 
@@ -112,9 +137,7 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
     if (!text.trim()) return setError("Escribí la tarea.");
     if (!date) return setError("Elegí una fecha.");
     if (repeat && !repeatDays.length) return setError("Elegí al menos un día para repetir.");
-    const changes = { text: text.trim(), assigned_date: date, block_type: blockType, prio, scheduled_time: time || null };
-    // Si cambió el día o el tipo, deja de estar atada a un bloque puntual.
-    if (date !== task.assigned_date || blockType !== (task.block_type ?? null)) changes.block_id = null;
+    const changes = { text: text.trim(), assigned_date: date, block_type: blockType, prio, scheduled_time: time || null, block_id: blockId };
     setBusy(true); setError("");
     try { await onSave(changes, repeat ? repeatDays : null); onClose(); }
     catch (err) { setError(err.message); setBusy(false); }
@@ -128,6 +151,12 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
 
   return (
     <Sheet title={isNew ? "Nueva tarea" : "Editar tarea"} onClose={onClose}>
+      {!isNew && !task.done && !task.routine_id && task.rollover_count >= 3 && (
+        <StuckPrompt task={task}
+          onSplit={async parts => { await onSplit(task, parts); onClose(); }}
+          onMove={async d => { await onSave({ assigned_date: d, block_id: null, rollover_count: 0 }); onClose(); }}
+          onRelease={async () => { await onDelete(task.id); onClose(); }} />
+      )}
       <textarea value={text} onChange={e => setText(e.target.value)} rows={2} autoFocus={isNew}
         placeholder="¿Qué hay que hacer?" style={{ ...FIELD, resize: "none", lineHeight: 1.45 }} />
       <div>
@@ -135,9 +164,25 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
         <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
       </div>
       <div>
-        <div style={LABEL}>Bloque</div>
-        <BlockTypePicker value={blockType} onChange={setBlockType} allowNone />
+        <div style={LABEL}>Tipo</div>
+        <BlockTypePicker value={blockType} onChange={setBlockType} allowNone types={TASK_TYPES} />
       </div>
+      {pickable.length > 0 && (
+        <div>
+          <div style={LABEL}>Bloque de ese día</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => setBlockId(null)} style={CHIP(blockId === null)}>Según el tipo</button>
+            {pickable.map(b => {
+              const bt = BLOCK_TYPE[b.block_type] || BLOCK_TYPE.otro;
+              return (
+                <button key={b.block_id} onClick={() => setBlockId(b.block_id)} style={CHIP(blockId === b.block_id, bt.color, bt.bg)}>
+                  {bt.icon} {b.label || bt.label} {hhmm(b.start_time)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div>
         <div style={LABEL}>Hora (opcional)</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -177,37 +222,49 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
 }
 
 // ─── BLOQUE ──────────────────────────────────────────────────
-function BlockCard({ block, tasks, isNow, onAdd, onEditDay, onToggle, onTap }) {
+function BlockCard({ block, tasks, isNow, started, done, onAdd, onEditDay, onToggle, onTap, onCheckin }) {
   const t = BLOCK_TYPE[block.block_type] || BLOCK_TYPE.otro;
-  const pending = tasks.filter(x => !x.done).length;
+  const isOcio = block.block_type === "ocio";
   return (
     <div style={{ background: "var(--surface)", border: `1.5px solid ${isNow ? t.color : "var(--border)"}`, borderLeft: `5px ${block.floating ? "dashed" : "solid"} ${t.color}`, borderRadius: 15, padding: "10px 12px 6px" }}>
-      <button onClick={() => onEditDay(block)} aria-label="Cambiar este bloque solo este día"
+      <button onClick={() => onEditDay(block)} aria-label="Opciones de este bloque para este día"
         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: "inherit", textAlign: "left" }}>
         <span style={{ fontSize: 16 }}>{t.icon}</span>
         <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{block.label || t.label}</span>
         {isNow && <span style={{ fontFamily: "monospace", fontSize: 9, fontWeight: 700, color: "var(--bg)", background: "var(--ink)", borderRadius: 6, padding: "2px 6px" }}>AHORA</span>}
+        {!isOcio && done && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--good)" }}>✓ Cumplido</span>}
         <span style={{ fontFamily: "monospace", fontSize: 11, color: block.overridden ? "var(--warn)" : "var(--ink-2)", fontWeight: block.overridden ? 700 : 400 }}>
           {block.overridden ? "✎ " : ""}{block.floating ? "~" : ""}{hhmm(block.start_time)}–{hhmm(block.end_time)}
         </span>
       </button>
-      <div style={{ marginTop: 4 }}>
-        {tasks.map(task => <TaskRow key={task.id} task={task} onToggle={onToggle} onTap={onTap} />)}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 0" }}>
-        <button onClick={() => onAdd(block)}
-          style={{ background: "none", border: "none", color: "var(--ink-2)", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 0" }}>
-          + Tarea
-        </button>
-        {tasks.length > 0 && <span style={{ fontFamily: "monospace", fontSize: 10, color: "var(--ink-3)" }}>{tasks.length - pending}/{tasks.length}</span>}
-      </div>
+      {isOcio ? (
+        <div style={{ fontSize: 13, color: "var(--ink-2)", padding: "6px 0 6px" }}>Tiempo libre. Está en el plan.</div>
+      ) : <>
+        <div style={{ marginTop: 4 }}>
+          {tasks.map(task => <TaskRow key={task.id} task={task} onToggle={onToggle} onTap={onTap} />)}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 0" }}>
+          <button onClick={() => onAdd(block)}
+            style={{ background: "none", border: "none", color: "var(--ink-2)", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 0" }}>
+            + Tarea
+          </button>
+          {started && !done && (
+            <button onClick={() => onCheckin(block, true)}
+              style={{ background: "none", border: "none", color: "var(--good)", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "6px 0" }}>
+              ✓ Estuve
+            </button>
+          )}
+        </div>
+      </>}
     </div>
   );
 }
 
 // ─── CAMBIAR UN BLOQUE SOLO ESE DÍA ──────────────────────────
-function BlockDaySheet({ block, date, onDone, onClose }) {
+function BlockDaySheet({ block, date, started, checked, onCheckin, onDone, onClose }) {
   const t = BLOCK_TYPE[block.block_type] || BLOCK_TYPE.otro;
+  const isOcio = block.block_type === "ocio";
+  const [confirmOcio, setConfirmOcio] = useState(false);
   const [start, setStart] = useState(hhmm(block.start_time));
   const [end, setEnd]     = useState(hhmm(block.end_time) === "24:00" ? "00:00" : hhmm(block.end_time));
   const [error, setError] = useState("");
@@ -227,6 +284,12 @@ function BlockDaySheet({ block, date, onDone, onClose }) {
 
   return (
     <Sheet title={`${t.icon} ${block.label || t.label} · solo ${dayTitle(date).toLowerCase()}`} onClose={onClose}>
+      {!isOcio && started && (
+        <button onClick={() => run(() => onCheckin(block, !checked))} disabled={busy}
+          style={{ ...GHOST_BTN, color: checked ? "var(--ink-2)" : "var(--good)", borderColor: checked ? "var(--border)" : "var(--good)", fontWeight: 700 }}>
+          {checked ? "Quitar \"✓ Estuve\"" : "✓ Estuve en este bloque"}
+        </button>
+      )}
       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>Estos cambios aplican solo a este día. Tu semana tipo no se toca.</div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
@@ -240,8 +303,13 @@ function BlockDaySheet({ block, date, onDone, onClose }) {
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
       <button onClick={saveTime} disabled={busy} style={{ ...PRIMARY_BTN, opacity: busy ? 0.6 : 1 }}>Cambiar horario este día</button>
-      <button onClick={() => run(() => setBlockOverride(block.block_id, date, { cancelled: true }))} disabled={busy}
-        style={{ ...GHOST_BTN, color: "var(--bad)", borderColor: "var(--bad-border)" }}>Cancelar el bloque este día</button>
+      {isOcio && confirmOcio && (
+        <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.5 }}>El ocio también es parte del plan, ¿seguro?</div>
+      )}
+      <button onClick={() => (isOcio && !confirmOcio ? setConfirmOcio(true) : run(() => setBlockOverride(block.block_id, date, { cancelled: true })))} disabled={busy}
+        style={{ ...GHOST_BTN, color: "var(--ink-2)" }}>
+        {isOcio && confirmOcio ? "Sí, cancelarlo este día" : "Cancelar el bloque este día"}
+      </button>
       {block.overridden && (
         <button onClick={() => run(() => clearBlockOverride(block.block_id, date))} disabled={busy} style={GHOST_BTN}>Volver al horario normal</button>
       )}
@@ -307,12 +375,7 @@ function Composer({ types, onAdd }) {
 }
 
 // ─── VISTA PRINCIPAL ─────────────────────────────────────────
-const MODES = [["dia", "Día"], ["linea", "Línea"], ["mes", "Mes"]];
-
-function readMode() {
-  try { const m = localStorage.getItem("daily-agenda-mode"); return MODES.some(([k]) => k === m) ? m : "dia"; }
-  catch { return "dia"; }
-}
+const MODES = [["ahora", "Ahora"], ["dia", "Día"], ["linea", "Línea"], ["mes", "Mes"]];
 
 const monthTitle = s => {
   const d = parseYmd(s), m = d.toLocaleDateString("es-AR", { month: "long" });
@@ -321,26 +384,32 @@ const monthTitle = s => {
 
 const firstOfMonth = (s, n = 0) => { const d = parseYmd(s); return ymd(new Date(d.getFullYear(), d.getMonth() + n, 1)); };
 
+// Antes de la primera: "7 cosas para hoy". Después: lo hecho, en positivo. Nunca "0 de 7".
 function DayProgress({ tasks }) {
   if (!tasks.length) return null;
   const done = tasks.filter(t => t.done).length;
+  if (done === 0) {
+    return <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-2)", textAlign: "center" }}>{tasks.length} cosa{tasks.length === 1 ? "" : "s"} para hoy</div>;
+  }
   const pct = Math.round((done / tasks.length) * 100);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div role="img" aria-label={`${done} de ${tasks.length} hechas`} style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
+      <div role="img" aria-label={`${done} hechas`} style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: "var(--good)", borderRadius: 4, transition: "width 0.3s" }} />
       </div>
-      <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
-        {done === tasks.length ? "✓ todo hecho" : `${done} de ${tasks.length} hechas`}
+      <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--good)", fontWeight: 700, whiteSpace: "nowrap" }}>
+        {done === tasks.length ? "✓ todo hecho" : `${done} hecha${done === 1 ? "" : "s"} ✓`}
       </span>
     </div>
   );
 }
 
-export default function AgendaView() {
+export default function AgendaView({ forceMode }) {
   const today = todayStr();
   const [selected, setSelected] = useState(today);
-  const [mode, setModeState]    = useState(readMode);
+  // null hasta la primera carga: abre en "Ahora" si hay un bloque en curso, si no en "Día".
+  const [mode, setModeState]    = useState(forceMode?.mode || null);
+  const [checkins, setCheckins] = useState([]);
   const [monthAnchor, setMonthAnchor] = useState(() => firstOfMonth(today));
   const [routines, setRoutines] = useState(null);
   const [blocks, setBlocks]     = useState([]);
@@ -375,16 +444,18 @@ export default function AgendaView() {
     (async () => {
       try {
         await ensureRoutineTasks(routines, week, today);
-        const [b, t, c, o, x, n] = await Promise.all([
+        const [b, t, c, o, x, n, k] = await Promise.all([
           fetchBlocksForDay(selected),
           fetchTasksForDate(selected),
           fetchPendingCounts(week[0], week[6]),
           fetchDayOverride(selected),
           fetchCancelledBlocks(selected),
           fetchNotesForDate(selected),
+          fetchCheckins(selected),
         ]);
         if (id !== requestId.current) return;  // el usuario ya cambió de día
-        setBlocks(b); setTasks(t); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setError("");
+        setBlocks(b); setTasks(t); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setCheckins(k); setError("");
+        if (selected === today) setModeState(m => m ?? (!o && currentBlock(b.filter(z => !z.floating), nowMinutes()) ? "ahora" : "dia"));
       } catch (err) {
         if (id === requestId.current) setError(err.message);
       } finally {
@@ -399,8 +470,11 @@ export default function AgendaView() {
   function setMode(m) {
     setModeState(m);
     if (m === "mes") setMonthAnchor(firstOfMonth(selected));
-    try { localStorage.setItem("daily-agenda-mode", m); } catch {}
+    if (m === "ahora") setSelected(today);
   }
+
+  // Tocar un aviso con la app abierta puede pedir un modo (ej. "ahora").
+  useEffect(() => { if (forceMode) setMode(forceMode.mode); }, [forceMode?.n]);  // solo cuando llega uno nuevo
 
   function pickDay(d) { setSelected(d); setMode("dia"); }
 
@@ -423,13 +497,30 @@ export default function AgendaView() {
   }
 
   async function saveTask(changes, repeatDays) {
-    let saved = sheet.id ? await updateTask(sheet.id, changes) : await createTask({ ...changes, block_id: sheet.block_id ?? null });
+    let saved = sheet.id ? await updateTask(sheet.id, changes) : await createTask(changes);
     if (repeatDays) {
       const { routine, task } = await makeRoutineFromTask(saved, repeatDays);
       saved = task;
       setRoutines(p => [...p, routine]);  // recarga y genera las próximas instancias
     }
     applyTask(saved);
+    refreshCounts();
+  }
+
+  async function checkin(block, on) {
+    try {
+      await setCheckin(block.block_id, selected, on);
+      setCheckins(p => on ? [...p, block.block_id] : p.filter(x => x !== block.block_id));
+    } catch (err) { setError(err.message); }
+  }
+
+  // Partir una tarea que se viene pasando en otras más chicas (arrancan de cero).
+  async function splitTask(task, parts) {
+    const created = await Promise.all(parts.map(text => createTask({
+      text, assigned_date: task.assigned_date, block_type: task.block_type, block_id: task.block_id, prio: task.prio,
+    })));
+    await deleteTask(task.id);
+    setTasks(p => [...p.filter(t => t.id !== task.id), ...created.filter(c => c.assigned_date === selected)]);
     refreshCounts();
   }
 
@@ -462,10 +553,10 @@ export default function AgendaView() {
     catch (err) { setError(err.message); }
   }
 
-  const { inBlock, loose } = placeTasks(blocks, tasks);
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const typesToday = [...new Set(blocks.map(b => b.block_type))];
+  const shownTasks = visibleTasks(tasks, today);
+  const { inBlock, loose } = placeTasks(blocks, shownTasks);
+  const nowMin = nowMinutes();
+  const typesToday = [...new Set(blocks.map(b => b.block_type))].filter(k => k !== "ocio");
   const isToday = selected === today;
   const year = parseYmd(selected).getFullYear();
   const dayBirthdays = birthdays.filter(b => birthdayOn(b.month, b.day, year) === selected);
@@ -483,7 +574,7 @@ export default function AgendaView() {
             </button>
           ))}
         </div>
-        {mode === "mes" ? (
+        {mode === "ahora" ? null : mode === "mes" ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button onClick={() => setMonthAnchor(firstOfMonth(monthAnchor, -1))} aria-label="Mes anterior" style={NAV_BTN}>‹</button>
             <div style={{ flex: 1, textAlign: "center", fontWeight: 800, fontSize: 15 }}>{monthTitle(monthAnchor)}</div>
@@ -504,19 +595,26 @@ export default function AgendaView() {
           )}
           <button onClick={() => setSelected(addDays(selected, 7))} style={LINK_BTN}>semana ›</button>
         </div>
-        <DayProgress tasks={tasks} />
+        <DayProgress tasks={shownTasks} />
         </>}
         {mode === "mes" && firstOfMonth(today) !== monthAnchor && (
           <button onClick={() => setMonthAnchor(firstOfMonth(today))} style={{ ...LINK_BTN, alignSelf: "center", fontWeight: 700, color: "var(--warn)" }}>Volver a este mes</button>
         )}
       </div>
 
+      {mode === "ahora" && (
+        <NowView blocks={blocks} tasks={shownTasks} checkins={checkins} dayOverride={dayOverride} today={today} loading={loading}
+          onToggle={toggle} onCheckin={checkin} />
+      )}
+
+      {mode === null && <div style={{ flex: 1, textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: 30 }}>Cargando…</div>}
+
       {mode === "mes" && (
         <MonthView anchor={monthAnchor} today={today} selected={selected} birthdays={birthdays} onPickDay={pickDay} />
       )}
 
       {mode === "linea" && (
-        <Timeline key={`timeline-${selected}`} blocks={blocks} tasks={tasks} isToday={isToday} onTapTask={setSheet} onTapBlock={setBlockSheet} />
+        <Timeline key={`timeline-${selected}`} blocks={blocks} tasks={shownTasks} checkins={checkins} isToday={isToday} onTapTask={setSheet} onTapBlock={setBlockSheet} />
       )}
 
       {mode === "dia" && (
@@ -582,6 +680,9 @@ export default function AgendaView() {
         {blocks.map(b => (
           <BlockCard key={b.block_id} block={b} tasks={inBlock[b.block_id]}
             isNow={isToday && !b.floating && nowMin >= toMinutes(b.start_time) && nowMin < toMinutes(b.end_time)}
+            started={blockStarted(b, selected, today, nowMin)}
+            done={blockDone(b, inBlock[b.block_id], checkins)}
+            onCheckin={checkin}
             onAdd={block => setSheet({ assigned_date: selected, block_type: block.block_type, block_id: block.block_id, prio: "mid" })}
             onEditDay={setBlockSheet}
             onToggle={toggle} onTap={setSheet} />
@@ -597,13 +698,16 @@ export default function AgendaView() {
 
       )}
 
-      {mode !== "mes" && <Composer key={`composer-${selected}`} types={typesToday} onAdd={quickAdd} />}
+      {(mode === "dia" || mode === "linea") && <Composer key={`composer-${selected}`} types={typesToday} onAdd={quickAdd} />}
 
       {sheet && (
-        <TaskSheet key={sheet.id || "new"} task={sheet} onSave={saveTask} onDelete={removeTask} onClose={() => setSheet(null)} />
+        <TaskSheet key={sheet.id || "new"} task={sheet} initialBlocks={sheet.assigned_date === selected ? blocks : null}
+          onSave={saveTask} onDelete={removeTask} onSplit={splitTask} onClose={() => setSheet(null)} />
       )}
       {blockSheet && (
-        <BlockDaySheet block={blockSheet} date={selected} onDone={reload} onClose={() => setBlockSheet(null)} />
+        <BlockDaySheet block={blockSheet} date={selected} started={blockStarted(blockSheet, selected, today, nowMin)}
+          checked={checkins.includes(blockSheet.block_id)} onCheckin={checkin}
+          onDone={() => {}} onClose={() => { setBlockSheet(null); reload(); }} />
       )}
       {atypicalSheet && (
         <AtypicalSheet date={selected} onClose={() => setAtypicalSheet(false)}

@@ -3,6 +3,7 @@ import { fetchWeekStats, fetchSavedSummary } from "./supabase";
 import Heatmap from "./Heatmap";
 import { BLOCK_TYPE, parseYmd, todayStr, addDays, weekDates, durationLabel, ERROR_BOX, SECTION } from "./ui";
 
+// Primero lo logrado; lo pendiente al final y en neutro. Nunca comparaciones hacia abajo.
 const INK = "var(--ink)", INK_2 = "var(--ink-2)", INK_3 = "var(--ink-3)", TRACK = "var(--surface-2)";
 
 function weekLabel(start) {
@@ -24,11 +25,10 @@ function Tile({ value, label, note }) {
   );
 }
 
-// Barra de avance: relleno = parte hecha. Siempre acompañada de su etiqueta y números en texto.
 function Progress({ done, total, color }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   return (
-    <div role="img" aria-label={`${done} de ${total} (${pct}%)`} style={{ height: 6, background: TRACK, borderRadius: 4, overflow: "hidden" }}>
+    <div role="img" aria-label={`${pct}%`} style={{ height: 6, background: TRACK, borderRadius: 4, overflow: "hidden" }}>
       <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
     </div>
   );
@@ -43,6 +43,8 @@ function Card({ title, children }) {
   );
 }
 
+const pctOf = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+
 export default function SummaryView() {
   const thisWeek = weekDates(todayStr())[0];
   const [weekStart, setWeekStart] = useState(thisWeek);
@@ -54,9 +56,9 @@ export default function SummaryView() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Semana pasada con snapshot → el snapshot; si no, cálculo en vivo.
+    // Semana pasada con snapshot (del formato nuevo) → el snapshot; si no, cálculo en vivo.
     fetchSavedSummary(weekStart)
-      .then(s => s ? [s.stats, true] : fetchWeekStats(weekStart).then(st => [st, false]))
+      .then(s => (s && s.stats.blocks_total !== undefined) ? [s.stats, true] : fetchWeekStats(weekStart).then(st => [st, false]))
       .then(([st, isSaved]) => { if (alive) { setStats(st); setSaved(isSaved); setError(""); } })
       .catch(err => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
@@ -64,12 +66,11 @@ export default function SummaryView() {
   }, [weekStart]);
 
   const isCurrent = weekStart === thisWeek;
-  const diff = stats ? stats.done - stats.done_prev : 0;
-  const diffNote = !stats ? null : diff > 0 ? `▲ ${diff} más que la anterior` : diff < 0 ? `▼ ${-diff} menos que la anterior` : "igual que la anterior";
-  const types = stats?.by_type || [];
-  const routines = stats?.routines || [];
-  const stuck = stats?.stuck || [];
-  const empty = stats && !stats.done && !stats.pending && !types.length;
+  const better = stats && stats.done_prev > 0 && stats.done > stats.done_prev ? stats.done - stats.done_prev : 0;
+  const weekPct = stats ? pctOf(stats.blocks_done, stats.blocks_total) : 0;
+  const types = (stats?.by_type || []).filter(t => t.blocks_total > 0 || t.done > 0);
+  const routines = (stats?.routines || []).filter(r => r.done > 0);
+  const empty = stats && !stats.done && !stats.blocks_done;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px 40px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -91,31 +92,34 @@ export default function SummaryView() {
       {stats && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: loading ? 0.55 : 1, transition: "opacity 0.15s" }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <Tile value={stats.done} label={stats.done === 1 ? "tarea hecha" : "tareas hechas"} note={diffNote} />
-            <Tile value={`🔥 ${stats.streak}`} label={stats.streak === 1 ? "día de racha" : "días de racha"} />
-            <Tile value={`${stats.active_days}/7`} label="días activos" />
+            <Tile value={stats.done} label={stats.done === 1 ? "cosa hecha" : "cosas hechas"} note={better ? `▲ ${better} más que la anterior` : null} />
+            <Tile value={`${weekPct}%`} label={isCurrent ? "de tus bloques, por ahora" : "de tus bloques"} />
+            <Tile value={`🔥 ${stats.streak_weeks}`} label={stats.streak_weeks === 1 ? "semana de racha" : "semanas de racha"}
+              note={stats.best_streak > stats.streak_weeks ? `mejor: ${stats.best_streak}` : null} />
           </div>
 
-          {empty && (
-            <div style={{ textAlign: "center", color: INK_3, fontSize: 13, padding: "24px 10px" }}>Sin actividad esta semana.</div>
-          )}
+          <div style={{ fontSize: 12, color: INK_2, textAlign: "center", lineHeight: 1.5 }}>
+            La racha suma cada semana en la que cumplís la mitad de tus bloques o más. Un día malo no la rompe.
+          </div>
+
+          {empty && <div style={{ textAlign: "center", color: INK_3, fontSize: 13, padding: "18px 10px" }}>La semana recién arranca.</div>}
 
           {types.length > 0 && (
-            <Card title="Por bloque">
+            <Card title="Por categoría">
               {types.map(t => {
                 const meta = BLOCK_TYPE[t.type] || { icon: "·", label: "Sin bloque", color: "var(--ink-3)" };
                 return (
                   <div key={t.type || "none"} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <span style={{ fontSize: 13.5, fontWeight: 600, color: INK, flex: 1 }}>{meta.icon} {meta.label}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: 11, color: INK_2 }}>
-                        {t.done} hecha{t.done === 1 ? "" : "s"}{t.pending ? ` · ${t.pending} pend.` : ""}
-                      </span>
+                      {t.blocks_total > 0 && <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{pctOf(t.blocks_done, t.blocks_total)}%</span>}
                     </div>
-                    <Progress done={t.done} total={t.done + t.pending} color={meta.color} />
-                    {t.planned_minutes > 0 && (
-                      <span style={{ fontFamily: "monospace", fontSize: 10, color: INK_3 }}>{durationLabel(t.planned_minutes)} de bloque en la semana</span>
-                    )}
+                    {t.blocks_total > 0 && <Progress done={t.blocks_done} total={t.blocks_total} color={meta.color} />}
+                    <span style={{ fontFamily: "monospace", fontSize: 10.5, color: INK_3 }}>
+                      {t.blocks_total > 0 ? `${t.blocks_done} de ${t.blocks_total} bloques` : ""}
+                      {t.blocks_total > 0 && t.done > 0 ? " · " : ""}
+                      {t.done > 0 ? `${t.done} ${t.done === 1 ? "cosa hecha" : "cosas hechas"}` : ""}
+                    </span>
                   </div>
                 );
               })}
@@ -125,23 +129,11 @@ export default function SummaryView() {
           {routines.length > 0 && (
             <Card title="Rutinas">
               {routines.map((r, i) => (
-                <div key={i} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: 13.5, color: INK, flex: 1 }}>🔁 {r.text}</span>
-                    <span style={{ fontFamily: "monospace", fontSize: 11, color: INK_2 }}>{r.done}/{r.total}</span>
-                  </div>
-                  <Progress done={r.done} total={r.total} color={INK} />
-                </div>
-              ))}
-            </Card>
-          )}
-
-          {stuck.length > 0 && (
-            <Card title="Se vienen pasando">
-              {stuck.map((s, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontSize: 13.5, color: INK, flex: 1, wordBreak: "break-word" }}>{s.text}</span>
-                  <span style={{ fontFamily: "monospace", fontSize: 11, color: INK_2, whiteSpace: "nowrap" }}>↻ {s.rollover_count} veces</span>
+                  <span style={{ fontSize: 13.5, color: INK, flex: 1 }}>🔁 {r.text}</span>
+                  <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--good)", fontWeight: 700 }}>
+                    {r.done} {r.done === 1 ? "vez" : "veces"} ✓
+                  </span>
                 </div>
               ))}
             </Card>
@@ -149,9 +141,12 @@ export default function SummaryView() {
 
           <Heatmap />
 
-          <div style={{ fontFamily: "monospace", fontSize: 10.5, color: INK_3, textAlign: "center", lineHeight: 1.7 }}>
-            {stats.planned_minutes > 0 && <>{durationLabel(stats.planned_minutes)} de bloques planificados</>}
-            {stats.atypical_days > 0 && <> · {stats.atypical_days} día{stats.atypical_days === 1 ? "" : "s"} atípico{stats.atypical_days === 1 ? "" : "s"}</>}
+          <div style={{ fontFamily: "monospace", fontSize: 10.5, color: INK_3, textAlign: "center", lineHeight: 1.8 }}>
+            {stats.active_days > 0 && <>{stats.active_days} día{stats.active_days === 1 ? "" : "s"} con avances</>}
+            {stats.active_days > 0 && stats.planned_minutes > 0 && " · "}
+            {stats.planned_minutes > 0 && <>{durationLabel(stats.planned_minutes)} de bloques</>}
+            {stats.atypical_days > 0 && <> · {stats.atypical_days} día{stats.atypical_days === 1 ? "" : "s"} atípico{stats.atypical_days === 1 ? "" : "s"} (no cuentan)</>}
+            {stats.pending > 0 && <><br />Para seguir: {stats.pending} cosa{stats.pending === 1 ? "" : "s"}</>}
             {isCurrent && <><br />El domingo a las 20 te llega el resumen.</>}
           </div>
         </div>

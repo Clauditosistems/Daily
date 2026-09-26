@@ -34,7 +34,7 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
     if (toMinutes(endDb) <= toMinutes(start)) return setError("El horario de fin tiene que ser posterior al de inicio.");
     setBusy(true); setError("");
     try {
-      await onSave({ block_type: blockType, label: label.trim() || null, start_time: start, end_time: endDb, floating }, days);
+      await onSave({ block_type: blockType, label: label.trim() || null, start_time: start, end_time: endDb, floating: blockType === "ocio" ? false : floating }, days);
       onClose();
     } catch (err) {
       setError(blockErrorMessage(err));
@@ -76,6 +76,11 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
           <DayPicker value={days} onToggle={toggleDay} />
         </div>
 
+        {blockType === "ocio" ? (
+          <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>
+            🎮 El ocio va con horario fijo: te aviso cuando empieza y cuando termina, así no se come el resto del día. No lleva tareas.
+          </div>
+        ) : (
         <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
           <input type="checkbox" checked={floating} onChange={e => setFloating(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16 }} />
           <span style={{ fontSize: 13, lineHeight: 1.45 }}>
@@ -83,6 +88,7 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
             <span style={{ display: "block", color: "var(--ink-3)", fontSize: 12 }}>El horario es aproximado y puede pisarse con otros bloques. Ideal para el domingo.</span>
           </span>
         </label>
+        )}
 
         {error && <div style={ERROR_BOX}>{error}</div>}
 
