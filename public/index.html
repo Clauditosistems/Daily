@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#f5f2ec" />
+  <meta name="theme-color" content="#f5f2ec" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)" />
   <meta name="description" content="Daily personal" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -11,10 +12,16 @@
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/icon-192.png" />
   <title>Daily</title>
+  <script>
+    // Tema elegido en Configuración, aplicado antes de pintar (sin destello).
+    try { var t = localStorage.getItem("daily-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { overflow-x: hidden; max-width: 100vw; }
     body { background: #f5f2ec; overscroll-behavior: none; }
+    @media (prefers-color-scheme: dark) { html:not([data-theme="light"]) body { background: #141311; } }
+    html[data-theme="dark"] body { background: #141311; }
     #root { height: 100dvh; display: flex; flex-direction: column; }
   </style>
 </head>

@@ -1,18 +1,21 @@
 // Constantes, helpers y estilos compartidos entre pantallas.
 
+// Colores por tipo: variables de theme.css (cambian con el modo oscuro). bg = tinte suave sobre la superficie.
+const typeColor = k => ({ color: `var(--t-${k})`, bg: `color-mix(in srgb, var(--t-${k}) 13%, var(--surface))` });
+
 export const BLOCK_TYPE = {
-  trabajo:  { label: "Trabajo",  icon: "💼", color: "#c0392b", bg: "#fdf1ee" },
-  estudio:  { label: "Estudio",  icon: "📚", color: "#2563c4", bg: "#eef3fd" },
-  facultad: { label: "Facultad", icon: "🎓", color: "#7c3aad", bg: "#f5eeff" },
-  entreno:  { label: "Entreno",  icon: "🏋️", color: "#1a9460", bg: "#edf8f3" },
-  ocio:     { label: "Ocio",     icon: "🎮", color: "#b8640a", bg: "#fdf6e8" },
-  otro:     { label: "Otro",     icon: "✦",  color: "#5a5248", bg: "#f2f0ec" },
+  trabajo:  { label: "Trabajo",  icon: "💼", ...typeColor("trabajo") },
+  estudio:  { label: "Estudio",  icon: "📚", ...typeColor("estudio") },
+  facultad: { label: "Facultad", icon: "🎓", ...typeColor("facultad") },
+  entreno:  { label: "Entreno",  icon: "🏋️", ...typeColor("entreno") },
+  ocio:     { label: "Ocio",     icon: "🎮", ...typeColor("ocio") },
+  otro:     { label: "Otro",     icon: "✦",  ...typeColor("otro") },
 };
 
 export const PRIO = {
-  high: { label: "Alta",  color: "#c0392b" },
-  mid:  { label: "Media", color: "#e6b800" },
-  low:  { label: "Baja",  color: "#1a9460" },
+  high: { label: "Alta",  color: "var(--prio-high)" },
+  mid:  { label: "Media", color: "var(--prio-mid)" },
+  low:  { label: "Baja",  color: "var(--prio-low)" },
 };
 export const PRIO_ORDER = { high: 0, mid: 1, low: 2 };
 
@@ -66,27 +69,28 @@ export function dayTitle(s) {
 
 // ─── ESTILOS ─────────────────────────────────────────────────
 export const FIELD = {
-  background: "#ede9e1", border: "1.5px solid #d8d2c6", borderRadius: 10,
-  color: "#1a1814", fontFamily: "inherit", fontSize: 14, padding: "9px 12px", outline: "none", width: "100%", boxSizing: "border-box",
+  background: "var(--surface-2)", border: "1.5px solid var(--border)", borderRadius: 10,
+  color: "var(--ink)", fontFamily: "inherit", fontSize: 14, padding: "9px 12px", outline: "none", width: "100%", boxSizing: "border-box",
 };
-export const LABEL = { fontFamily: "monospace", fontSize: 9.5, color: "#a09890", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 6 };
-export const CHIP = (active, color = "#1a1814", bg = "#1a1814") => ({
+export const LABEL = { fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 6 };
+export const CHIP = (active, color = "var(--ink)", bg = "var(--ink)") => ({
   flexShrink: 0, padding: "6px 11px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", fontSize: 12,
-  border: `1.5px solid ${active ? color : "#d8d2c6"}`, background: active ? bg : "transparent",
-  color: active ? (bg === "#1a1814" ? "#f5f2ec" : color) : "#6b6457", fontWeight: active ? 700 : 500,
+  border: `1.5px solid ${active ? color : "var(--border)"}`, background: active ? bg : "transparent",
+  // El texto usa tinta, no el color del tipo (el color va en el borde y el fondo).
+  color: active ? (bg === "var(--ink)" ? "var(--bg)" : "var(--ink)") : "var(--ink-2)", fontWeight: active ? 700 : 500,
 });
-export const PRIMARY_BTN = { background: "#1a1814", color: "#f5f2ec", border: "none", borderRadius: 12, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" };
-export const GHOST_BTN = { background: "transparent", color: "#1a1814", border: "1.5px solid #d8d2c6", borderRadius: 12, padding: "11px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-export const ERROR_BOX = { background: "#fdf1ee", color: "#c0392b", borderRadius: 10, padding: "9px 12px", fontSize: 12.5 };
+export const PRIMARY_BTN = { background: "var(--ink)", color: "var(--bg)", border: "none", borderRadius: 12, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" };
+export const GHOST_BTN = { background: "transparent", color: "var(--ink)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "11px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" };
+export const ERROR_BOX = { background: "var(--bad-bg)", color: "var(--bad)", borderRadius: 10, padding: "9px 12px", fontSize: 12.5 };
 export const SECTION = { fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", padding: "6px 2px 0" };
 
 // ─── BOTTOM SHEET ────────────────────────────────────────────
 export function Sheet({ title, onClose, children }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: "22px 22px 0 0", padding: "20px 20px 34px", width: "100%", maxWidth: 520, boxShadow: "0 -8px 40px rgba(0,0,0,0.15)", maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, boxSizing: "border-box" }}>
-        <div style={{ width: 36, height: 4, background: "#d8d2c6", borderRadius: 2, margin: "0 auto" }} />
+        style={{ background: "var(--surface)", borderRadius: "22px 22px 0 0", padding: "20px 20px 34px", width: "100%", maxWidth: 520, boxShadow: "0 -8px 40px rgba(0,0,0,0.15)", maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, boxSizing: "border-box" }}>
+        <div style={{ width: 36, height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto" }} />
         <div style={{ fontSize: 16, fontWeight: 800 }}>{title}</div>
         {children}
       </div>
@@ -111,7 +115,7 @@ export function PrioPicker({ value, onChange }) {
   return (
     <div style={{ display: "flex", gap: 6 }}>
       {Object.entries(PRIO).map(([k, p]) => (
-        <button key={k} onClick={() => onChange(k)} style={CHIP(value === k, p.color, "#fff")}>● {p.label}</button>
+        <button key={k} onClick={() => onChange(k)} style={CHIP(value === k, p.color, "var(--surface)")}>● {p.label}</button>
       ))}
     </div>
   );

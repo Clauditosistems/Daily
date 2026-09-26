@@ -1,0 +1,97 @@
+/* Tokens de color. Claro por defecto; oscuro según el sistema o elegido en Configuración
+   (data-theme en <html>). Los componentes usan var(--…), nunca hex sueltos. */
+
+:root {
+  color-scheme: light;
+  --bg:          #f5f2ec;
+  --surface:     #ffffff;
+  --surface-2:   #ede9e1;   /* campos, pistas de barras */
+  --border:      #d8d2c6;
+  --border-soft: #ebe6dc;
+  --ink:         #1a1814;
+  --ink-2:       #6b6457;
+  --ink-3:       #a09890;
+  --overlay:     rgba(0, 0, 0, 0.45);
+
+  --good:        #1a9460;  --good-bg: #edf8f3;
+  --bad:         #c0392b;  --bad-bg:  #fdf1ee;  --bad-border: #f0c8c0;
+  --warn:        #b8640a;
+  --info:        #2563c4;  --info-bg: #eef3fd;
+  --hl-bg:       #fffaf0;  --hl-border: #f0d8a8;
+  --prio-high:   #c0392b;  --prio-mid: #d9a400;  --prio-low: #1a9460;
+
+  /* Tipos de bloque: tramo seguido de la paleta validada (rojo + azul, naranja, aqua, amarillo, magenta).
+     Pasa entre vecinos en claro y oscuro, también con daltonismo; el color siempre va con ícono o nombre. */
+  --t-trabajo:  #e34948;
+  --t-estudio:  #2a78d6;
+  --t-facultad: #eb6834;
+  --t-entreno:  #1baf7a;
+  --t-ocio:     #eda100;
+  --t-otro:     #e87ba4;
+
+  /* Mapa de actividad: rampa secuencial azul, claro → oscuro = poco → mucho. */
+  --heat-1: #b7d3f6;  --heat-2: #6da7ec;  --heat-3: #2a78d6;  --heat-4: #184f95;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg:          #141311;
+    --surface:     #1f1e1b;
+    --surface-2:   #2a2825;
+    --border:      #3a3733;
+    --border-soft: #2c2a27;
+    --ink:         #f2efe9;
+    --ink-2:       #c3bdb2;
+    --ink-3:       #8a847b;
+    --overlay:     rgba(0, 0, 0, 0.6);
+
+    --good:        #3cbf7f;  --good-bg: #16291f;
+    --bad:         #ef6b5d;  --bad-bg:  #2e1a17;  --bad-border: #5a2c26;
+    --warn:        #e0943a;
+    --info:        #6ea0f0;  --info-bg: #1a2436;
+    --hl-bg:       #2a2418;  --hl-border: #5a4a28;
+    --prio-high:   #ef6b5d;  --prio-mid: #e0b43a;  --prio-low: #3cbf7f;
+
+    --t-trabajo:  #e66767;
+    --t-estudio:  #3987e5;
+    --t-facultad: #d95926;
+    --t-entreno:  #199e70;
+    --t-ocio:     #c98500;
+    --t-otro:     #d55181;
+
+    --heat-1: #184f95;  --heat-2: #256abf;  --heat-3: #3987e5;  --heat-4: #86b6ef;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:          #141311;
+  --surface:     #1f1e1b;
+  --surface-2:   #2a2825;
+  --border:      #3a3733;
+  --border-soft: #2c2a27;
+  --ink:         #f2efe9;
+  --ink-2:       #c3bdb2;
+  --ink-3:       #8a847b;
+  --overlay:     rgba(0, 0, 0, 0.6);
+
+  --good:        #3cbf7f;  --good-bg: #16291f;
+  --bad:         #ef6b5d;  --bad-bg:  #2e1a17;  --bad-border: #5a2c26;
+  --warn:        #e0943a;
+  --info:        #6ea0f0;  --info-bg: #1a2436;
+  --hl-bg:       #2a2418;  --hl-border: #5a4a28;
+  --prio-high:   #ef6b5d;  --prio-mid: #e0b43a;  --prio-low: #3cbf7f;
+
+  --t-trabajo:  #e66767;
+  --t-estudio:  #3987e5;
+  --t-facultad: #d95926;
+  --t-entreno:  #199e70;
+  --t-ocio:     #c98500;
+  --t-otro:     #d55181;
+
+  --heat-1: #184f95;  --heat-2: #256abf;  --heat-3: #3987e5;  --heat-4: #86b6ef;
+}
+
+body { background: var(--bg); color: var(--ink); }
+input, textarea, select { color: var(--ink); }

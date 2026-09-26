@@ -21,7 +21,7 @@ function viewFromUrl(url = window.location.href) {
   return TABS.some(([id]) => id === v) ? v : "agenda";
 }
 
-const SHELL = { fontFamily: "'Segoe UI',system-ui,sans-serif", background: "#f5f2ec", color: "#1a1814", height: "100dvh", display: "flex", flexDirection: "column", width: "100%", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflowX: "hidden" };
+const SHELL = { fontFamily: "'Segoe UI',system-ui,sans-serif", background: "var(--bg)", color: "var(--ink)", height: "100dvh", display: "flex", flexDirection: "column", width: "100%", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflowX: "hidden" };
 
 export default function App() {
   const [session, setSession] = useState(undefined);  // undefined = todavía no se sabe
@@ -49,26 +49,26 @@ export default function App() {
   }, [session, view]);
 
   if (session === undefined) {
-    return <div style={{ ...SHELL, alignItems: "center", justifyContent: "center", color: "#a09890", fontSize: 13 }}>Cargando…</div>;
+    return <div style={{ ...SHELL, alignItems: "center", justifyContent: "center", color: "var(--ink-3)", fontSize: 13 }}>Cargando…</div>;
   }
 
   return (
     <div style={SHELL}>
-      <div style={{ background: "#f5f2ec", padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 30, borderBottom: "1px solid #d8d2c6" }}>
+      <div style={{ background: "var(--bg)", padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 30, borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: session ? 11 : 14 }}>
           <button onClick={() => session && setView(view === "config" ? "agenda" : "config")} aria-label="Configuración"
             style={{ background: "none", border: "none", padding: 0, cursor: session ? "pointer" : "default", fontFamily: "inherit", color: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.7px" }}>Daily</span>
-            {session && <span style={{ fontSize: 13, color: view === "config" ? "#1a1814" : "#a09890" }}>⚙</span>}
+            {session && <span style={{ fontSize: 13, color: view === "config" ? "var(--ink)" : "var(--ink-3)" }}>⚙</span>}
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {session && pushOff && view !== "config" && (
               <button onClick={() => setView("config")}
-                style={{ background: "#eef3fd", border: "1.5px solid #2563c4", color: "#2563c4", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ background: "var(--info-bg)", border: "1.5px solid var(--info)", color: "var(--info)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 🔔 Avisos
               </button>
             )}
-            <span style={{ fontFamily: "monospace", fontSize: 9, color: "#a09890" }}>
+            <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--ink-3)" }}>
               {new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}
             </span>
           </div>
@@ -77,7 +77,7 @@ export default function App() {
           <div style={{ display: "flex" }}>
             {TABS.map(([v, label]) => (
               <button key={v} onClick={() => setView(v)}
-                style={{ flex: 1, padding: "8px 4px", border: "none", background: "transparent", fontFamily: "inherit", fontSize: 12, fontWeight: view === v ? 700 : 500, color: view === v ? "#1a1814" : "#a09890", cursor: "pointer", borderBottom: `2px solid ${view === v ? "#1a1814" : "transparent"}` }}>
+                style={{ flex: 1, padding: "8px 4px", border: "none", background: "transparent", fontFamily: "inherit", fontSize: 12, fontWeight: view === v ? 700 : 500, color: view === v ? "var(--ink)" : "var(--ink-3)", cursor: "pointer", borderBottom: `2px solid ${view === v ? "var(--ink)" : "transparent"}` }}>
                 {label}
               </button>
             ))}

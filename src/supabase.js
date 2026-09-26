@@ -317,6 +317,21 @@ export async function makeRoutineFromTask(task, days) {
   return { routine, task: updated };
 }
 
+// ─── VISTAS AGREGADAS ────────────────────────────────────────
+// Un registro por día: tipos de bloque, pendientes, hechas, notas, día atípico.
+export async function fetchMonthOverview(from, to) {
+  const { data, error } = await supabase.rpc("month_overview", { p_from: from, p_to: to });
+  if (error) throw error;
+  return data;
+}
+
+// Tareas completadas por día (fecha local) desde "from".
+export async function fetchActivity(from) {
+  const { data, error } = await supabase.rpc("activity_by_day", { p_from: from });
+  if (error) throw error;
+  return data;
+}
+
 // ─── MIGRACIÓN DESDE INDEXEDDB ───────────────────────────────
 // Solo tareas (type "task") con fecha. Los adjuntos se ignoran.
 const CTX_TO_BLOCK_TYPE = { work: "trabajo", study: "estudio" };

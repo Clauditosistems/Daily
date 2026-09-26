@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { fetchWeekStats, fetchSavedSummary } from "./supabase";
+import Heatmap from "./Heatmap";
 import { BLOCK_TYPE, parseYmd, todayStr, addDays, weekDates, durationLabel, ERROR_BOX, SECTION } from "./ui";
 
-const INK = "#1a1814", INK_2 = "#6b6457", INK_3 = "#a09890", TRACK = "#ede9e1";
+const INK = "var(--ink)", INK_2 = "var(--ink-2)", INK_3 = "var(--ink-3)", TRACK = "var(--surface-2)";
 
 function weekLabel(start) {
   const end = addDays(start, 6);
@@ -15,7 +16,7 @@ function weekLabel(start) {
 
 function Tile({ value, label, note }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 14, padding: "10px 12px" }}>
+    <div style={{ flex: 1, minWidth: 0, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "10px 12px" }}>
       <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-1px", color: INK, lineHeight: 1.1 }}>{value}</div>
       <div style={{ fontSize: 11.5, color: INK_2, marginTop: 2 }}>{label}</div>
       {note && <div style={{ fontFamily: "monospace", fontSize: 10, color: INK_3, marginTop: 3 }}>{note}</div>}
@@ -35,7 +36,7 @@ function Progress({ done, total, color }) {
 
 function Card({ title, children }) {
   return (
-    <div style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 15, padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 15, padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ ...SECTION, color: INK_2, padding: 0 }}>{title}</div>
       {children}
     </div>
@@ -102,7 +103,7 @@ export default function SummaryView() {
           {types.length > 0 && (
             <Card title="Por bloque">
               {types.map(t => {
-                const meta = BLOCK_TYPE[t.type] || { icon: "·", label: "Sin bloque", color: "#a09890" };
+                const meta = BLOCK_TYPE[t.type] || { icon: "·", label: "Sin bloque", color: "var(--ink-3)" };
                 return (
                   <div key={t.type || "none"} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -146,6 +147,8 @@ export default function SummaryView() {
             </Card>
           )}
 
+          <Heatmap />
+
           <div style={{ fontFamily: "monospace", fontSize: 10.5, color: INK_3, textAlign: "center", lineHeight: 1.7 }}>
             {stats.planned_minutes > 0 && <>{durationLabel(stats.planned_minutes)} de bloques planificados</>}
             {stats.atypical_days > 0 && <> · {stats.atypical_days} día{stats.atypical_days === 1 ? "" : "s"} atípico{stats.atypical_days === 1 ? "" : "s"}</>}
@@ -157,4 +160,4 @@ export default function SummaryView() {
   );
 }
 
-const NAV_BTN = { width: 34, height: 34, borderRadius: "50%", border: "1.5px solid #d8d2c6", background: "transparent", fontSize: 18, lineHeight: 1, cursor: "pointer", color: "#1a1814", fontFamily: "inherit" };
+const NAV_BTN = { width: 34, height: 34, borderRadius: "50%", border: "1.5px solid var(--border)", background: "transparent", fontSize: 18, lineHeight: 1, cursor: "pointer", color: "var(--ink)", fontFamily: "inherit" };
