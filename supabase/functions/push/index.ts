@@ -2,7 +2,7 @@
 //
 // Acciones (POST JSON { action }):
 //   public-key  → devuelve la clave pública VAPID (la genera la primera vez).
-//   send-due    → manda los avisos de bloques que empezaron (la llama pg_cron cada minuto).
+//   send-due    → manda los avisos pendientes: bloques que empezaron y resumen semanal (pg_cron cada minuto).
 //   test        → manda un aviso de prueba al usuario del JWT.
 
 import webpush from "npm:web-push@3.6.7";
@@ -73,10 +73,10 @@ Deno.serve(async (req) => {
     if (action === "public-key") return json({ publicKey });
 
     if (action === "send-due") {
-      const { data, error } = await admin.rpc("due_block_notifications");
+      const { data, error } = await admin.rpc("due_notifications");
       if (error) throw error;
       let sent = 0;
-      for (const n of data) sent += await sendToUser(n.user_id, { title: n.title, body: n.body, tag: n.key });
+      for (const n of data) sent += await sendToUser(n.user_id, { title: n.title, body: n.body, tag: n.key, url: n.url });
       return json({ due: data.length, sent });
     }
 
