@@ -7,6 +7,7 @@ import {
   BLOCK_TYPE, DAYS, hhmm, toMinutes, durationLabel,
   FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, DayPicker,
 } from "./ui";
+import PushSettings from "./PushSettings";
 
 // Un bloque que termina a medianoche se guarda como 24:00 (el input time no lo admite).
 const endForDb = t => (t === "00:00" ? "24:00" : t);
@@ -184,6 +185,7 @@ export default function BlocksView({ session }) {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px 40px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <PushSettings />
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0 2px" }}>
         <div style={{ fontSize: 13, color: "#6b6457" }}>Tu semana tipo. Se repite todas las semanas.</div>
         {weekMinutes > 0 && <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#a09890" }}>{durationLabel(weekMinutes)}/sem</div>}

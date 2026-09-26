@@ -1,4 +1,4 @@
-const CACHE = "miinbox-v1";
+const CACHE = "daily-v2";
 const ASSETS = ["/", "/index.html", "/static/js/main.chunk.js", "/static/js/bundle.js", "/manifest.json"];
 
 // Install: cache assets
@@ -29,51 +29,30 @@ self.addEventListener("fetch", e => {
   );
 });
 
-// Push notifications
+// Push: el payload viene de la Edge Function "push" ({ title, body, tag, url }).
 self.addEventListener("push", e => {
-  const data = e.data?.json() || { title: "Mi Inbox", body: "Tenés tareas pendientes" };
+  let data = {};
+  try { data = e.data?.json() || {}; } catch { data = { body: e.data?.text() }; }
   e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
+    self.registration.showNotification(data.title || "Daily", {
+      body: data.body || "",
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      tag: data.tag || "miinbox",
+      tag: data.tag || "daily",
       renotify: true,
-      data: { url: "/" }
+      data: { url: data.url || "/" },
     })
   );
 });
 
-// Notification click
+// Tocar la notificación: enfoca la app si ya está abierta, si no la abre.
 self.addEventListener("notificationclick", e => {
   e.notification.close();
-  e.waitUntil(clients.openWindow(e.notification.data?.url || "/"));
+  const url = e.notification.data?.url || "/";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      const open = list.find(c => new URL(c.url).origin === self.location.origin);
+      return open ? open.focus() : self.clients.openWindow(url);
+    })
+  );
 });
-
-// Background sync for scheduled notifications
-self.addEventListener("message", e => {
-  if (e.data?.type === "SCHEDULE_CHECK") {
-    checkDeadlines(e.data.tasks);
-  }
-});
-
-function checkDeadlines(tasks) {
-  if (!tasks?.length) return;
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-  tasks.forEach(t => {
-    if (!t.deadline || t.done) return;
-    if (t.deadline === todayStr && t.time) {
-      const [h, m] = t.time.split(":").map(Number);
-      const taskTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-      const diff = taskTime - now;
-      if (diff > 0 && diff <= 30 * 60 * 1000) {
-        self.registration.showNotification("⏰ Tarea próxima", {
-          body: `"${t.text}" vence a las ${t.time}`,
-          icon: "/icon-192.png",
-          tag: `task-${t.id}`,
-        });
-      }
-    }
-  });
-}

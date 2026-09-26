@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { registerSW } from "./notifications";
+import { registerSW, pushStatus } from "./notifications";
 import { supabase, syncTimezone } from "./supabase";
 import Login from "./Login";
 import AgendaView from "./Agenda";
@@ -17,6 +17,7 @@ const SHELL = { fontFamily: "'Segoe UI',system-ui,sans-serif", background: "#f5f
 export default function App() {
   const [session, setSession] = useState(undefined);  // undefined = todavía no se sabe
   const [view, setView]       = useState("agenda");
+  const [pushOff, setPushOff] = useState(false);
 
   useEffect(() => {
     registerSW();
@@ -28,6 +29,10 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (session) pushStatus().then(s => setPushOff(s === "off" || s === "install")).catch(() => {});
+  }, [session, view]);
+
   if (session === undefined) {
     return <div style={{ ...SHELL, alignItems: "center", justifyContent: "center", color: "#a09890", fontSize: 13 }}>Cargando…</div>;
   }
@@ -37,9 +42,17 @@ export default function App() {
       <div style={{ background: "#f5f2ec", padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 30, borderBottom: "1px solid #d8d2c6" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: session ? 11 : 14 }}>
           <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.7px" }}>Daily</span>
-          <span style={{ fontFamily: "monospace", fontSize: 9, color: "#a09890" }}>
-            {new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {session && pushOff && view !== "semana" && (
+              <button onClick={() => setView("semana")}
+                style={{ background: "#eef3fd", border: "1.5px solid #2563c4", color: "#2563c4", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                🔔 Avisos
+              </button>
+            )}
+            <span style={{ fontFamily: "monospace", fontSize: 9, color: "#a09890" }}>
+              {new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).toUpperCase()}
+            </span>
+          </div>
         </div>
         {session && (
           <div style={{ display: "flex" }}>
