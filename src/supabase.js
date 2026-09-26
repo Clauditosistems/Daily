@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { db } from "./db";
+import { addDays, parseYmd } from "./ui";
 
 // La anon key es pública por diseño (viaja en el bundle); la protección real es RLS.
 const SUPABASE_URL      = "https://rtpqdivjgrykwwbnsksw.supabase.co";
@@ -57,6 +58,128 @@ export function blockErrorMessage(error) {
   if (error?.code === "23P01") return "Se superpone con otro bloque de ese día.";
   if (error?.code === "23514") return "El horario de fin tiene que ser posterior al de inicio.";
   return error?.message || "No se pudo guardar.";
+}
+
+// Bloques efectivos de una fecha (semana tipo + overrides + día atípico).
+export async function fetchBlocksForDay(date) {
+  const { data, error } = await supabase.rpc("blocks_for_day", { p_date: date });
+  if (error) throw error;
+  return data;
+}
+
+// ─── TAREAS ──────────────────────────────────────────────────
+export async function fetchTasksForDate(date) {
+  const { data, error } = await supabase.from("tasks").select("*").eq("assigned_date", date).order("created_at");
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchOverdueTasks(beforeDate) {
+  const { data, error } = await supabase.from("tasks").select("*")
+    .eq("done", false).lt("assigned_date", beforeDate).order("assigned_date");
+  if (error) throw error;
+  return data;
+}
+
+// Tareas pendientes por día para la tira semanal.
+export async function fetchPendingCounts(from, to) {
+  const { data, error } = await supabase.from("tasks").select("assigned_date")
+    .eq("done", false).gte("assigned_date", from).lte("assigned_date", to);
+  if (error) throw error;
+  const counts = {};
+  data.forEach(t => { counts[t.assigned_date] = (counts[t.assigned_date] || 0) + 1; });
+  return counts;
+}
+
+export async function createTask(task) {
+  const { data, error } = await supabase.from("tasks").insert(task).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTask(id, changes) {
+  const { data, error } = await supabase.from("tasks").update(changes).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTask(id) {
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ─── RUTINAS ─────────────────────────────────────────────────
+export async function fetchRoutines() {
+  const { data, error } = await supabase.from("routines").select("*").order("created_at");
+  if (error) throw error;
+  return data;
+}
+
+export async function createRoutine(routine) {
+  const { data, error } = await supabase.from("routines").insert(routine).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// Los cambios también se aplican a las instancias pendientes de hoy en adelante.
+export async function updateRoutine(id, changes, today) {
+  // Se regenera desde hoy para que los días agregados tengan su instancia.
+  const { data, error } = await supabase.from("routines")
+    .update({ ...changes, generated_until: addDays(today, -1) }).eq("id", id).select().single();
+  if (error) throw error;
+  const { error: e2 } = await supabase.from("tasks")
+    .update({ text: data.text, block_type: data.block_type, prio: data.prio })
+    .eq("routine_id", id).eq("done", false).gte("assigned_date", today);
+  if (e2) throw e2;
+  // Días que dejaron de aplicar (o rutina pausada): se borran sus instancias futuras pendientes.
+  const removed = [0, 1, 2, 3, 4, 5, 6].filter(d => !data.active || !data.days_of_week.includes(d));
+  if (removed.length) await deleteFutureInstances(id, today, removed);
+  return data;
+}
+
+export async function deleteRoutine(id, today) {
+  await deleteFutureInstances(id, today);
+  const { error } = await supabase.from("routines").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function deleteFutureInstances(routineId, today, weekdays = null) {
+  const { data, error } = await supabase.from("tasks").select("id, assigned_date")
+    .eq("routine_id", routineId).eq("done", false).gte("assigned_date", today);
+  if (error) throw error;
+  const ids = data
+    .filter(t => !weekdays || weekdays.includes(parseYmd(t.assigned_date).getDay()))
+    .map(t => t.id);
+  if (!ids.length) return;
+  const { error: e2 } = await supabase.from("tasks").delete().in("id", ids);
+  if (e2) throw e2;
+}
+
+// Crea las instancias de las rutinas activas desde hoy (o desde donde se quedó cada rutina)
+// hasta la última fecha pedida. generated_until evita recrear instancias borradas a mano.
+export async function ensureRoutineTasks(routines, dates, today) {
+  const until = dates.reduce((a, b) => (a > b ? a : b));
+  if (until < today) return;
+  const rows = [], advanced = [];
+  routines.filter(r => r.active).forEach(r => {
+    let date = r.generated_until && r.generated_until >= today ? addDays(r.generated_until, 1) : today;
+    if (date > until) return;
+    for (; date <= until; date = addDays(date, 1)) {
+      if (r.days_of_week.includes(parseYmd(date).getDay()))
+        rows.push({ routine_id: r.id, assigned_date: date, text: r.text, block_type: r.block_type, prio: r.prio });
+    }
+    advanced.push(r);
+  });
+  if (rows.length) {
+    const { error } = await supabase.from("tasks")
+      .upsert(rows, { onConflict: "routine_id,assigned_date", ignoreDuplicates: true });
+    if (error) throw error;
+  }
+  for (const r of advanced) {
+    const { error } = await supabase.from("routines").update({ generated_until: until }).eq("id", r.id);
+    if (error) throw error;
+    r.generated_until = until;
+  }
 }
 
 // ─── MIGRACIÓN DESDE INDEXEDDB ───────────────────────────────
