@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { db } from "./db";
 import { requestPermission, registerSW, scheduleDeadlineCheck, checkAndNotifyToday } from "./notifications";
+import { supabase, syncTimezone } from "./supabase";
+import BlocksView from "./Blocks";
 
 const CTX = {
   work:     { label: "Trabajo",  icon: "💼", accent: "#c0392b", bg: "#fdf1ee", fg: "#c0392b" },
@@ -478,6 +480,16 @@ export default function App() {
   const [detailItem, setDetailItem] = useState(null);
   const [loading,  setLoading] = useState(true);
   const [notifOk,  setNotifOk] = useState(false);
+  const [session,  setSession] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === "SIGNED_IN" && s) syncTimezone(s.user.id).catch(console.error);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     registerSW();
@@ -592,7 +604,7 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex" }}>
-          {[["inbox","📥 Inbox"], ["hoy", `⚡ Hoy${dueToday.length + overdue.length > 0 ? ` (${dueToday.length + overdue.length})` : ""}`], ["historial","📜 Historial"]].map(([v, l]) => (
+          {[["inbox","📥 Inbox"], ["hoy", `⚡ Hoy${dueToday.length + overdue.length > 0 ? ` (${dueToday.length + overdue.length})` : ""}`], ["historial","📜 Historial"], ["bloques","🗓 Semana"]].map(([v, l]) => (
             <button key={v} onClick={() => setView(v)}
               style={{ flex: 1, padding: "8px 4px", border: "none", background: "transparent", fontFamily: "inherit", fontSize: 12, fontWeight: view === v ? 700 : 500, color: view === v ? "#1a1814" : "#a09890", cursor: "pointer", borderBottom: `2px solid ${view === v ? "#1a1814" : "transparent"}`, transition: "all 0.15s" }}>
               {l}
@@ -683,7 +695,10 @@ export default function App() {
         </div>
       )}
 
-      <Compose onSend={addItem} />
+      {/* ── SEMANA (bloques) ── */}
+      {view === "bloques" && <BlocksView session={session} />}
+
+      {view !== "bloques" && <Compose onSend={addItem} />}
       {detailItem && <DetailModal item={detailItem} onClose={() => setDetailItem(null)} onEdit={id => { setDetailItem(null); setEditId(id); }} onComplete={id => { completeItem(id); setDetailItem(null); }} onDelete={id => { deleteItem(id); setDetailItem(null); }} />}
       {editId && editItem_ && <EditModal item={editItem_} onSave={data => saveEdit(editId, data)} onClose={() => setEditId(null)} />}
     </div>
