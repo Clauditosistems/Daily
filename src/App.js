@@ -4,19 +4,27 @@ import { supabase, syncTimezone } from "./supabase";
 import Login from "./Login";
 import AgendaView from "./Agenda";
 import RoutinesView from "./Routines";
+import SummaryView from "./Summary";
 import BlocksView from "./Blocks";
 
 const TABS = [
   ["agenda",   "📅 Agenda"],
   ["rutinas",  "🔁 Rutinas"],
+  ["resumen",  "📊 Resumen"],
   ["semana",   "⚙ Semana"],
 ];
+
+// "/?view=resumen" (lo usa el push del domingo) abre directo esa pestaña.
+function viewFromUrl(url = window.location.href) {
+  const v = new URL(url, window.location.origin).searchParams.get("view");
+  return TABS.some(([id]) => id === v) ? v : "agenda";
+}
 
 const SHELL = { fontFamily: "'Segoe UI',system-ui,sans-serif", background: "#f5f2ec", color: "#1a1814", height: "100dvh", display: "flex", flexDirection: "column", width: "100%", maxWidth: 520, margin: "0 auto", position: "relative", fontSize: 14, overflowX: "hidden" };
 
 export default function App() {
   const [session, setSession] = useState(undefined);  // undefined = todavía no se sabe
-  const [view, setView]       = useState("agenda");
+  const [view, setView]       = useState(viewFromUrl);
   const [pushOff, setPushOff] = useState(false);
 
   useEffect(() => {
@@ -26,7 +34,13 @@ export default function App() {
       setSession(s);
       if (event === "SIGNED_IN" && s) syncTimezone(s.user.id).catch(console.error);
     });
-    return () => subscription.unsubscribe();
+    // Tocar una notificación con la app abierta: el service worker avisa a qué vista ir.
+    const onMessage = e => { if (e.data?.type === "navigate") setView(viewFromUrl(e.data.url)); };
+    navigator.serviceWorker?.addEventListener("message", onMessage);
+    return () => {
+      subscription.unsubscribe();
+      navigator.serviceWorker?.removeEventListener("message", onMessage);
+    };
   }, []);
 
   useEffect(() => {
@@ -69,6 +83,7 @@ export default function App() {
       {!session && <Login />}
       {session && view === "agenda"  && <AgendaView />}
       {session && view === "rutinas" && <RoutinesView />}
+      {session && view === "resumen" && <SummaryView />}
       {session && view === "semana"  && <BlocksView session={session} />}
     </div>
   );

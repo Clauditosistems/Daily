@@ -52,7 +52,9 @@ self.addEventListener("notificationclick", e => {
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
       const open = list.find(c => new URL(c.url).origin === self.location.origin);
-      return open ? open.focus() : self.clients.openWindow(url);
+      if (!open) return self.clients.openWindow(url);
+      open.postMessage({ type: "navigate", url });
+      return open.focus();
     })
   );
 });

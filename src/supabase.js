@@ -223,6 +223,22 @@ export async function ensureRoutineTasks(routines, dates, today) {
   }
 }
 
+// ─── RESUMEN SEMANAL ─────────────────────────────────────────
+// Stats en vivo de una semana (lunes a domingo).
+export async function fetchWeekStats(weekStart) {
+  const { data, error } = await supabase.rpc("my_week_stats", { p_week_start: weekStart });
+  if (error) throw error;
+  return data;
+}
+
+// Snapshot guardado el domingo a la noche, si existe.
+export async function fetchSavedSummary(weekStart) {
+  const { data, error } = await supabase.from("weekly_summaries").select("stats, created_at")
+    .eq("week_start", weekStart).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // ─── MIGRACIÓN DESDE INDEXEDDB ───────────────────────────────
 // Solo tareas (type "task") con fecha. Los adjuntos se ignoran.
 const CTX_TO_BLOCK_TYPE = { work: "trabajo", study: "estudio" };
