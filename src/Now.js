@@ -1,23 +1,46 @@
 import { useState, useEffect } from "react";
 import { fetchBlocksForDay } from "./supabase";
-import { BLOCK_TYPE, hhmm, toMinutes, addDays, PRIMARY_BTN, GHOST_BTN } from "./ui";
+import { BLOCK_TYPE, hhmm, toMinutes, addDays, PRIMARY_BTN, TEXT_BTN, Icon } from "./ui";
 import { placeTasks, blockDone, currentBlock, nextBlock, nowMinutes, durationText } from "./plan";
 
 // Una sola pregunta: ¿qué hago ahora? El bloque en curso y UNA tarea. Sin listas ni totales.
+// Es la pantalla protagonista: la única con tipografía grande y más aire.
 
 const blockName = b => { const t = BLOCK_TYPE[b.block_type] || BLOCK_TYPE.otro; return `${t.icon} ${b.label || t.label}`; };
 
-function Card({ children, accent }) {
+function Hero({ children }) {
   return (
-    <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderLeft: accent ? `5px solid ${accent}` : undefined,
-      borderRadius: 18, padding: "18px 18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className="view-in" style={{ background: "var(--surface)", borderRadius: 20, boxShadow: "var(--shadow-card)",
+      padding: "22px 22px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
       {children}
     </div>
   );
 }
 
-const Big = ({ children }) => <div style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.35, color: "var(--ink)", wordBreak: "break-word" }}>{children}</div>;
-const Soft = ({ children }) => <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.55 }}>{children}</div>;
+const Big = ({ children }) => (
+  <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, color: "var(--ink)", wordBreak: "break-word" }}>{children}</div>
+);
+const Soft = ({ children }) => <div style={{ fontSize: 16, color: "var(--ink-2)", lineHeight: 1.5 }}>{children}</div>;
+const BIG_BTN = { ...PRIMARY_BTN, padding: "17px 18px", fontSize: 17, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 };
+
+function BlockHeader({ block, nowMin }) {
+  const start = toMinutes(block.start_time), end = toMinutes(block.end_time);
+  const pct = Math.min(100, Math.max(0, Math.round(((nowMin - start) / (end - start)) * 100)));
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{blockName(block)}</span>
+        <span className="num" style={{ fontSize: 13, color: "var(--ink-2)", whiteSpace: "nowrap" }}>quedan {durationText(Math.max(0, end - nowMin))}</span>
+      </div>
+      <div className="num" style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 2 }}>
+        {block.floating ? "~" : ""}{hhmm(block.start_time)} – {hhmm(block.end_time)}
+      </div>
+      <div style={{ height: 3, background: "var(--surface-2)", borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 2, transition: "width 0.6s var(--ease-sheet)" }} />
+      </div>
+    </div>
+  );
+}
 
 export default function NowView({ blocks, tasks, checkins, dayOverride, today, loading, onToggle, onCheckin }) {
   const [nowMin, setNowMin]     = useState(nowMinutes);
@@ -37,9 +60,6 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
   }, [today]);
 
   const doneToday = tasks.filter(t => t.done).length;
-  const footer = doneToday > 0 && (
-    <div style={{ textAlign: "center", fontSize: 13, color: "var(--good)", fontWeight: 600 }}>Hoy: {doneToday} hecha{doneToday === 1 ? "" : "s"} ✓</div>
-  );
   const tomorrowLine = tomorrow
     ? `Mañana arrancás con ${blockName(tomorrow)} a las ${hhmm(tomorrow.start_time)}.`
     : "Mañana no tenés bloques.";
@@ -48,98 +68,93 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
   if (loading && !blocks.length) {
     content = <Soft>Cargando…</Soft>;
   } else if (dayOverride) {
-    content = <Card><Big>☾ Hoy es un día atípico.</Big><Soft>Tomalo con calma. Los bloques de hoy quedan en pausa.</Soft></Card>;
+    content = <Hero><Big>Hoy es un día atípico.</Big><Soft>Tomalo con calma. Los bloques de hoy quedan en pausa.</Soft></Hero>;
   } else {
     const cur = currentBlock(blocks, nowMin);
     const next = nextBlock(blocks.filter(b => !cur || b.block_id !== cur.block_id), nowMin);
     const nextLine = next && `Lo próximo: ${blockName(next)} a las ${hhmm(next.start_time)}.`;
 
-    if (cur) {
-      const t = BLOCK_TYPE[cur.block_type] || BLOCK_TYPE.otro;
-      const start = toMinutes(cur.start_time), end = toMinutes(cur.end_time);
-      const left = Math.max(0, end - nowMin);
-      const pct = Math.min(100, Math.round(((nowMin - start) / (end - start)) * 100));
-      const header = (
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{blockName(cur)}</div>
-          <div style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--ink-2)", marginTop: 2 }}>
-            {cur.floating ? "~" : ""}{hhmm(cur.start_time)} – {hhmm(cur.end_time)} · quedan {durationText(left)}
-          </div>
-          <div style={{ height: 4, background: "var(--surface-2)", borderRadius: 4, marginTop: 8, overflow: "hidden" }}>
-            <div style={{ width: `${pct}%`, height: "100%", background: t.color, borderRadius: 4 }} />
-          </div>
-        </div>
+    if (cur && cur.block_type === "ocio") {
+      content = (
+        <Hero>
+          <BlockHeader block={cur} nowMin={nowMin} />
+          <Big>Tiempo libre hasta las {hhmm(cur.end_time)}.</Big>
+          <Soft>Está en el plan, disfrutalo.{nextLine ? ` ${nextLine}` : ""}</Soft>
+        </Hero>
       );
+    } else if (cur) {
+      const { inBlock } = placeTasks(blocks, tasks);
+      const own = inBlock[cur.block_id] || [];
+      const pending = own.filter(x => !x.done);
+      const candidates = pending.filter(x => !skipped.includes(x.id));
+      const task = candidates[0] || pending[0];
 
-      if (cur.block_type === "ocio") {
+      if (task) {
         content = (
-          <Card accent={t.color}>
-            {header}
-            <Big>Tiempo libre hasta las {hhmm(cur.end_time)}.</Big>
-            <Soft>Está en el plan, disfrutalo.{nextLine ? ` ${nextLine}` : ""}</Soft>
-          </Card>
+          <Hero>
+            <BlockHeader block={cur} nowMin={nowMin} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>Para ahora</div>
+              <Big key={task.id}><span className="view-in" style={{ display: "block" }}>{task.text}</span></Big>
+              {task.scheduled_time && <div className="num" style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 6 }}>a las {hhmm(task.scheduled_time)}</div>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button onClick={async () => { await onToggle(task); setCheer(true); setTimeout(() => setCheer(false), 1600); }} style={BIG_BTN}>
+                Listo
+              </button>
+              {pending.length > 1 && (
+                <button onClick={() => setSkipped(s => (candidates.length <= 1 ? [] : [...s, task.id]))} style={{ ...TEXT_BTN, alignSelf: "center" }}>Otra cosa</button>
+              )}
+            </div>
+          </Hero>
+        );
+      } else if (blockDone(cur, own, checkins)) {
+        content = (
+          <Hero>
+            <BlockHeader block={cur} nowMin={nowMin} />
+            <Big>Listo el bloque.</Big>
+            <Soft>{nextLine || "Lo que queda del bloque es tuyo."}</Soft>
+          </Hero>
         );
       } else {
-        const { inBlock } = placeTasks(blocks, tasks);
-        const own = inBlock[cur.block_id] || [];
-        const pending = own.filter(x => !x.done);
-        const candidates = pending.filter(x => !skipped.includes(x.id));
-        const task = candidates[0] || pending[0];
-        const cumplido = blockDone(cur, own, checkins);
-
-        if (task) {
-          content = (
-            <Card accent={t.color}>
-              {header}
-              <div>
-                <div style={{ fontFamily: "monospace", fontSize: 10, letterSpacing: "1px", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 6 }}>Para ahora</div>
-                <Big>{task.scheduled_time && <span style={{ fontFamily: "monospace", fontSize: 16, marginRight: 8 }}>{hhmm(task.scheduled_time)}</span>}{task.text}</Big>
-              </div>
-              {cheer && <div style={{ color: "var(--good)", fontWeight: 700, fontSize: 14 }}>Bien ahí ✓</div>}
-              <button onClick={async () => { await onToggle(task); setCheer(true); setTimeout(() => setCheer(false), 1600); }}
-                style={{ ...PRIMARY_BTN, padding: "15px 16px", fontSize: 16 }}>✓ Listo</button>
-              {pending.length > 1 && (
-                <button onClick={() => setSkipped(s => (candidates.length <= 1 ? [] : [...s, task.id]))} style={GHOST_BTN}>Otra cosa</button>
-              )}
-            </Card>
-          );
-        } else if (cumplido) {
-          content = (
-            <Card accent={t.color}>
-              {header}
-              <Big>Listo el bloque ✓</Big>
-              <Soft>{nextLine || "Lo que queda del bloque es tuyo."}</Soft>
-            </Card>
-          );
-        } else {
-          content = (
-            <Card accent={t.color}>
-              {header}
+        content = (
+          <Hero>
+            <BlockHeader block={cur} nowMin={nowMin} />
+            <div>
               <Big>No hay nada puntual.</Big>
-              <Soft>Con estar alcanza.</Soft>
-              <button onClick={() => onCheckin(cur, true)} style={{ ...PRIMARY_BTN, padding: "15px 16px", fontSize: 16 }}>✓ Estuve</button>
-            </Card>
-          );
-        }
+              <div style={{ marginTop: 8 }}><Soft>Con estar alcanza.</Soft></div>
+            </div>
+            <button onClick={() => onCheckin(cur, true)} style={BIG_BTN}>Estuve</button>
+          </Hero>
+        );
       }
     } else if (next) {
       content = (
-        <Card>
+        <Hero>
           <Big>Ahora no tenés nada.</Big>
-          <Soft>{nextLine} (en {durationText(toMinutes(next.start_time) - nowMin)})</Soft>
-        </Card>
+          <Soft>{nextLine} Empieza en {durationText(toMinutes(next.start_time) - nowMin)}.</Soft>
+        </Hero>
       );
     } else if (blocks.length) {
-      content = <Card><Big>Por hoy está. 🌙</Big><Soft>{tomorrowLine}</Soft></Card>;
+      content = <Hero><Big>Por hoy está.</Big><Soft>{tomorrowLine}</Soft></Hero>;
     } else {
-      content = <Card><Big>Hoy no tenés bloques.</Big><Soft>{tomorrowLine}</Soft></Card>;
+      content = <Hero><Big>Hoy no tenés bloques.</Big><Soft>{tomorrowLine}</Soft></Hero>;
     }
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px 30px", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: "8px 16px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
       {content}
-      {footer}
+      {cheer && (
+        <div className="cheer-in" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--good)", fontSize: 16, fontWeight: 600 }}>
+          <Icon name="check" size={18} stroke={2.6} /> Bien ahí
+        </div>
+      )}
+      {!cheer && doneToday > 0 && (
+        <div className="num" style={{ textAlign: "center", fontSize: 15, color: "var(--ink-2)" }}>
+          Hoy llevás {doneToday} hecha{doneToday === 1 ? "" : "s"}
+        </div>
+      )}
     </div>
   );
 }

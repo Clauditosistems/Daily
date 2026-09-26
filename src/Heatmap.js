@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchActivity, fetchAtypicalDays } from "./supabase";
-import { parseYmd, addDays, weekDates, todayStr } from "./ui";
+import { parseYmd, addDays, weekDates, todayStr, CARD } from "./ui";
 
 const WEEKS = 22;     // ~5 meses; entra en 360 px de ancho
 const CELL = 11, GAP = 2;
@@ -49,23 +49,24 @@ export default function Heatmap() {
   });
 
   return (
-    <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 15, padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <span style={{ fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--ink-2)" }}>Actividad</span>
-        <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-3)" }}>{total} hechas · {activeDays} días</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 7, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0 16px" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Actividad</span>
+        <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>{total} hechas en {activeDays} días</span>
       </div>
+    <div style={{ ...CARD, padding: "14px 14px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
 
       <div style={{ display: "flex", gap: GAP, overflowX: "auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: GAP, paddingTop: 13 }}>
           {ROW_LABELS.map((l, i) => (
-            <span key={i} style={{ height: CELL, fontFamily: "monospace", fontSize: 8.5, lineHeight: `${CELL}px`, color: "var(--ink-3)", width: 9 }}>{l}</span>
+            <span key={i} style={{ height: CELL, fontSize: 9, fontWeight: 500, lineHeight: `${CELL}px`, color: "var(--ink-3)", width: 9 }}>{l}</span>
           ))}
         </div>
         {weeks.map((days, w) => {
           const showMonth = labelCols.has(w);
           return (
             <div key={w} style={{ display: "flex", flexDirection: "column", gap: GAP }}>
-              <span style={{ height: 11, fontFamily: "monospace", fontSize: 8.5, color: "var(--ink-3)", whiteSpace: "nowrap", width: CELL, overflow: "visible" }}>
+              <span style={{ height: 11, fontSize: 9, fontWeight: 500, color: "var(--ink-3)", whiteSpace: "nowrap", width: CELL, overflow: "visible" }}>
                 {showMonth ? parseYmd(days[0]).toLocaleDateString("es-AR", { month: "short" }).replace(".", "") : ""}
               </span>
               {days.map(d => {
@@ -89,17 +90,18 @@ export default function Heatmap() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+        <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>
           {atypical.includes(shown) && !counts[shown]
             ? <>{fmt(shown)}: día atípico ☾</>
             : <>{fmt(shown)}: <b style={{ color: "var(--ink)" }}>{counts[shown] || 0}</b> hecha{counts[shown] === 1 ? "" : "s"}</>}
         </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--ink-3)" }}>
           menos
           {[0, 1, 2, 4, 6].map(n => <span key={n} style={{ width: 9, height: 9, borderRadius: 2, background: level(n) }} />)}
           más
         </span>
       </div>
+    </div>
     </div>
   );
 }

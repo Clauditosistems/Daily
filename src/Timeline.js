@@ -44,10 +44,10 @@ export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapT
       <div style={{ position: "relative", height, marginTop: 6 }}>
         {Array.from({ length: endH - startH + 1 }, (_, i) => startH + i).map(h => (
           <div key={h} style={{ position: "absolute", top: y(h * 60), left: 0, right: 0, display: "flex", alignItems: "center", gap: 6, pointerEvents: "none" }}>
-            <span style={{ width: GUTTER - 6, textAlign: "right", fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)", transform: "translateY(-1px)" }}>
+            <span className="num" style={{ width: GUTTER - 6, textAlign: "right", fontSize: 11, fontWeight: 500, color: "var(--ink-3)", transform: "translateY(-1px)" }}>
               {String(h % 24).padStart(2, "0")}:00
             </span>
-            <span style={{ flex: 1, height: 1, background: "var(--border-soft)" }} />
+            <span style={{ flex: 1, height: 0.5, background: "var(--border)" }} />
           </div>
         ))}
 
@@ -61,17 +61,17 @@ export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapT
               style={{
                 position: "absolute", top: top + 1, height: h - 2,
                 left: b.floating ? `calc(${GUTTER}px + 50%)` : GUTTER, right: 4,
-                background: t.bg, border: `1.5px ${b.floating ? "dashed" : "solid"} ${isNow ? t.color : "var(--border-soft)"}`,
+                background: t.bg, border: "none", boxShadow: isNow ? "inset 0 0 0 1.5px var(--accent)" : "none",
                 borderLeft: `4px ${b.floating ? "dashed" : "solid"} ${t.color}`, borderRadius: 10,
                 padding: "5px 8px", textAlign: "left", cursor: "pointer", fontFamily: "inherit", color: "var(--ink)", overflow: "hidden",
                 display: "flex", flexDirection: "column", alignItems: "flex-start",
               }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+              <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                 {t.icon} {b.label || t.label}
                 {b.block_type !== "ocio" && blockDone(b, inBlock[b.block_id], checkins) && <span style={{ color: "var(--good)", marginLeft: 6 }}>✓</span>}
               </span>
               {h >= 40 && (
-                <span style={{ fontFamily: "monospace", fontSize: 10, color: "var(--ink-2)" }}>
+                <span className="num" style={{ fontSize: 12, color: "var(--ink-2)" }}>
                   {b.floating ? "~" : ""}{hhmm(b.start_time)}–{hhmm(b.end_time)}
                 </span>
               )}
@@ -84,11 +84,11 @@ export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapT
             style={{
               position: "absolute", top, height: PIN_H, left: GUTTER + 70, right: 10, zIndex: 2,
               display: "flex", alignItems: "center", gap: 6, padding: "0 8px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
-              background: "var(--surface)", border: "1.5px solid var(--border)", color: t.done ? "var(--ink-3)" : "var(--ink)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.12)", textAlign: "left", overflow: "hidden",
+              background: "var(--surface)", border: "none", color: t.done ? "var(--ink-3)" : "var(--ink)",
+              boxShadow: "var(--shadow-float)", textAlign: "left", overflow: "hidden",
             }}>
-            <span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700 }}>{hhmm(t.scheduled_time)}</span>
-            <span style={{ fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: t.done ? "line-through" : "none" }}>
+            <span className="num" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>{hhmm(t.scheduled_time)}</span>
+            <span style={{ fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: t.done ? "line-through" : "none" }}>
               {t.done ? "✓ " : ""}{t.text}
             </span>
           </button>
@@ -96,9 +96,9 @@ export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapT
 
         {isToday && nowMin >= start && nowMin <= endH * 60 && (
           <div style={{ position: "absolute", top: y(nowMin), left: GUTTER - 4, right: 0, zIndex: 3, pointerEvents: "none", display: "flex", alignItems: "center" }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--bad)", marginTop: -1 }} />
-            <span style={{ flex: 1, height: 2, background: "var(--bad)" }} />
-            <span style={{ position: "absolute", left: -GUTTER + 4, width: GUTTER - 6, textAlign: "right", fontFamily: "monospace", fontSize: 9.5, fontWeight: 700, color: "var(--bad)", background: "var(--bg)" }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", marginTop: -1 }} />
+            <span style={{ flex: 1, height: 2, background: "var(--accent)" }} />
+            <span style={{ position: "absolute", left: -GUTTER + 4, width: GUTTER - 6, textAlign: "right", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "var(--bg)" }}>
               {hhmm(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)}
             </span>
           </div>
@@ -106,8 +106,8 @@ export default function Timeline({ blocks, tasks, checkins = [], isToday, onTapT
       </div>
 
       {untimed > 0 && (
-        <div style={{ marginTop: 12, fontSize: 12, color: "var(--ink-3)", textAlign: "center" }}>
-          + {untimed} tarea{untimed === 1 ? "" : "s"} sin hora — las ves en la vista Día.
+        <div style={{ marginTop: 16, fontSize: 13, color: "var(--ink-2)", textAlign: "center" }}>
+          {untimed} tarea{untimed === 1 ? "" : "s"} sin hora en la vista Día.
         </div>
       )}
     </div>

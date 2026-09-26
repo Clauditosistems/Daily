@@ -4,7 +4,7 @@ import {
 } from "./supabase";
 import {
   BLOCK_TYPE, DAYS, hhmm, toMinutes, durationLabel,
-  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, DayPicker,
+  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, DayPicker, Group, Row, Icon, Toggle, DANGER_BTN, TEXT_BTN
 } from "./ui";
 
 // Un bloque que termina a medianoche se guarda como 24:00 (el input time no lo admite).
@@ -63,11 +63,11 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
         <div style={{ display: "flex", gap: 10 }}>
           <div style={{ flex: 1 }}>
             <div style={LABEL}>Desde</div>
-            <input type="time" value={start} onChange={e => setStart(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
+            <input type="time" value={start} onChange={e => setStart(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={LABEL}>Hasta</div>
-            <input type="time" value={end} onChange={e => setEnd(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
+            <input type="time" value={end} onChange={e => setEnd(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
           </div>
         </div>
 
@@ -77,24 +77,24 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
         </div>
 
         {blockType === "ocio" ? (
-          <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>
-            🎮 El ocio va con horario fijo: te aviso cuando empieza y cuando termina, así no se come el resto del día. No lleva tareas.
+          <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
+            El ocio va con horario fijo: te aviso cuando empieza y cuando termina, así no se come el resto del día. No lleva tareas.
           </div>
         ) : (
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-          <input type="checkbox" checked={floating} onChange={e => setFloating(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16 }} />
-          <span style={{ fontSize: 13, lineHeight: 1.45 }}>
-            <b>Horario flexible</b>
-            <span style={{ display: "block", color: "var(--ink-3)", fontSize: 12 }}>El horario es aproximado y puede pisarse con otros bloques. Ideal para el domingo.</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ flex: 1, fontSize: 16, lineHeight: 1.4 }}>
+            Horario flexible
+            <span style={{ display: "block", color: "var(--ink-2)", fontSize: 13, marginTop: 2 }}>Aproximado; puede pisarse con otros bloques y no avisa. Ideal para el domingo.</span>
           </span>
-        </label>
+          <Toggle label="Horario flexible" checked={floating} onChange={setFloating} />
+        </div>
         )}
 
         {error && <div style={ERROR_BOX}>{error}</div>}
 
         <div style={{ display: "flex", gap: 8 }}>
-          {!isNew && <button onClick={remove} disabled={busy} style={{ ...GHOST_BTN, color: "var(--bad)", borderColor: "var(--bad-border)" }}>🗑</button>}
-          <button onClick={onClose} style={{ ...GHOST_BTN, flex: 1 }}>Cancelar</button>
+          {!isNew && <button onClick={remove} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+          <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
           <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Guardar"}</button>
         </div>
     </Sheet>
@@ -102,20 +102,20 @@ function BlockSheet({ block, defaultDay, onSave, onDelete, onClose }) {
 }
 
 // ─── FILA DE BLOQUE ──────────────────────────────────────────
-function BlockRow({ block, onTap }) {
+function BlockRow({ block, onTap, divider }) {
   const t = BLOCK_TYPE[block.block_type] || BLOCK_TYPE.otro;
   return (
-    <button onClick={() => onTap(block)}
-      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: t.bg, border: "none", borderLeft: `4px ${block.floating ? "dashed" : "solid"} ${t.color}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", fontFamily: "inherit" }}>
-      <span style={{ fontSize: 16 }}>{t.icon}</span>
+    <Row onClick={() => onTap(block)} divider={divider} chevron>
+      <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: t.color, flexShrink: 0,
+        boxShadow: block.floating ? `0 0 0 2px var(--surface), 0 0 0 3.5px ${t.color}` : "none", opacity: block.floating ? 0.6 : 1 }} />
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{block.label || t.label}</span>
-        {block.floating && <span style={{ fontFamily: "monospace", fontSize: 9, color: "var(--ink-2)", fontWeight: 700, letterSpacing: "0.5px" }}>~ FLEXIBLE</span>}
+        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.icon} {block.label || t.label}</span>
+        {block.floating && <span style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>Horario flexible</span>}
       </span>
-      <span style={{ fontFamily: "monospace", fontSize: 11.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
+      <span className="num" style={{ fontSize: 15, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
         {block.floating ? "~" : ""}{hhmm(block.start_time)}–{hhmm(block.end_time)}
       </span>
-    </button>
+    </Row>
   );
 }
 
@@ -152,34 +152,28 @@ export default function BlocksView() {
   const weekMinutes = blocks.filter(b => !b.floating).reduce((s, b) => s + toMinutes(b.end_time) - toMinutes(b.start_time), 0);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px 40px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0 2px" }}>
-        <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Tu semana tipo. Se repite todas las semanas.</div>
-        {weekMinutes > 0 && <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-3)" }}>{durationLabel(weekMinutes)}/sem</div>}
-      </div>
-
+    <div className="view-in" style={{ flex: 1, overflowY: "auto", padding: "4px 16px 40px", display: "flex", flexDirection: "column", gap: 24 }}>
       {error && <div style={ERROR_BOX}>{error}</div>}
-      {loading && <div style={{ color: "var(--ink-3)", fontSize: 13, padding: 20, textAlign: "center" }}>Cargando…</div>}
+      {loading && <div style={{ color: "var(--ink-2)", fontSize: 15, padding: 20, textAlign: "center" }}>Cargando…</div>}
 
       {!loading && DAYS.map(([n, name]) => {
         const list = byDay[n];
         const minutes = list.filter(b => !b.floating).reduce((s, b) => s + toMinutes(b.end_time) - toMinutes(b.start_time), 0);
         return (
-          <div key={n} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 15, padding: "11px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 700, fontSize: 14 }}>{name}</span>
-              {minutes > 0 && <span style={{ fontFamily: "monospace", fontSize: 10, color: "var(--ink-3)" }}>{durationLabel(minutes)}</span>}
-            </div>
-            {list.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{n === 0 ? "Día libre. Podés sumar bloques flexibles." : "Sin bloques."}</div>}
-            {list.map(b => <BlockRow key={b.id} block={b} onTap={block => setSheet({ block })} />)}
-            <button onClick={() => setSheet({ day: n })}
-              style={{ background: "transparent", border: "1.5px dashed var(--border)", borderRadius: 10, padding: "7px", fontFamily: "inherit", fontSize: 12, color: "var(--ink-2)", cursor: "pointer" }}>
-              + Agregar bloque
-            </button>
-          </div>
+          <Group key={n} header={minutes > 0 ? `${name} · ${durationLabel(minutes)}` : name}>
+            {list.map((b, i) => <BlockRow key={b.id} block={b} divider={i > 0} onTap={block => setSheet({ block })} />)}
+            <Row divider={list.length > 0} onClick={() => setSheet({ day: n })}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--accent)" }}>
+                <Icon name="plus" size={18} stroke={2.2} /> {list.length === 0 && n === 0 ? "Agregar bloque (día libre)" : "Agregar bloque"}
+              </span>
+            </Row>
+          </Group>
         );
       })}
 
+      {weekMinutes > 0 && (
+        <div className="num" style={{ fontSize: 13, color: "var(--ink-2)", textAlign: "center" }}>{durationLabel(weekMinutes)} de bloques por semana</div>
+      )}
 
       {sheet && (
         <BlockSheet

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { fetchMonthOverview } from "./supabase";
-import { BLOCK_TYPE, parseYmd, ymd, addDays, weekDates, birthdayOn, ERROR_BOX } from "./ui";
+import { BLOCK_TYPE, parseYmd, ymd, addDays, weekDates, birthdayOn, ERROR_BOX, CARD } from "./ui";
 
 const TYPE_ORDER = Object.keys(BLOCK_TYPE);  // cada tipo ocupa siempre la misma posición en la casilla
 const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
@@ -52,11 +52,11 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
   const typesInMonth = TYPE_ORDER.filter(k => Object.values(data).some(r => r.block_types.includes(k)));
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 30px" }}>
+    <div className="view-in" style={{ flex: 1, overflowY: "auto", padding: "4px 16px 30px" }}>
       {error && <div style={ERROR_BOX}>{error}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, opacity: loading ? 0.55 : 1, transition: "opacity 0.15s" }}>
+      <div style={{ ...CARD, padding: "10px 6px", display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, opacity: loading ? 0.55 : 1, transition: "opacity 0.2s" }}>
         {WEEKDAYS.map(w => (
-          <div key={w} style={{ textAlign: "center", fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)", padding: "2px 0 4px" }}>{w}</div>
+          <div key={w} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--ink-3)", padding: "2px 0 6px" }}>{w}</div>
         ))}
         {days.map(d => {
           const r = data[d];
@@ -79,17 +79,19 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
           return (
             <button key={d} onClick={() => onPickDay(d)} aria-label={label} title={label}
               style={{
-                minWidth: 0, height: 58, padding: "4px 2px 3px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+                minWidth: 0, height: 62, padding: "4px 0 4px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", border: "none",
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between",
-                background: r?.atypical ? "var(--surface-2)" : isSelected ? "var(--surface)" : inMonth ? "var(--surface)" : "transparent",
-                border: `1.5px solid ${isToday ? "var(--ink)" : isSelected ? "var(--border)" : inMonth ? "var(--border-soft)" : "transparent"}`,
-                opacity: inMonth ? 1 : 0.45, color: "var(--ink)",
+                background: r?.atypical ? "var(--surface-2)" : isSelected && !isToday ? "var(--accent-soft)" : "transparent",
+                opacity: inMonth ? 1 : 0.35, color: "var(--ink)",
               }}>
-              <span style={{ fontSize: 12.5, fontWeight: isToday ? 800 : 600, lineHeight: 1 }}>{parseYmd(d).getDate()}</span>
+              <span className="num" style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 15, fontWeight: isToday ? 700 : 500, background: isToday ? "var(--accent)" : "transparent", color: isToday ? "#fff" : "var(--ink)" }}>
+                {parseYmd(d).getDate()}
+              </span>
               <TypeStrip types={r?.block_types || []} />
-              <span style={{ display: "flex", alignItems: "center", gap: 1, fontSize: 9.5, lineHeight: 1, minHeight: 11, whiteSpace: "nowrap" }}>
-                {done > 0 && <span style={{ fontFamily: "monospace", fontWeight: 800, color: "var(--good)" }}>✓{done}</span>}
-                {planned > 0 && done === 0 && <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--ink-3)" }}>{planned}</span>}
+              <span className="num" style={{ display: "flex", alignItems: "center", gap: 1, fontSize: 10.5, lineHeight: 1, minHeight: 12, whiteSpace: "nowrap" }}>
+                {done > 0 && <span style={{ fontWeight: 700, color: "var(--good)" }}>✓{done}</span>}
+                {planned > 0 && done === 0 && <span style={{ fontWeight: 500, color: "var(--ink-3)" }}>{planned}</span>}
                 {names.length > 0 && <span>🎂</span>}
                 {r?.notes > 0 && <span>📝</span>}
                 {r?.atypical && <span>☾</span>}
@@ -99,19 +101,19 @@ export default function MonthView({ anchor, today, selected, birthdays, onPickDa
         })}
       </div>
 
-      <div style={{ marginTop: 12, padding: "10px 12px", background: "var(--surface)", border: "1.5px solid var(--border-soft)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ marginTop: 16, padding: "0 6px", display: "flex", flexDirection: "column", gap: 8 }}>
         {typesInMonth.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
             {typesInMonth.map(k => (
-              <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--ink-2)" }}>
+              <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-2)" }}>
                 <span style={{ width: 10, height: 4, borderRadius: 2, background: BLOCK_TYPE[k].color }} />
                 {BLOCK_TYPE[k].icon} {BLOCK_TYPE[k].label}
               </span>
             ))}
           </div>
         )}
-        <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>
-          Las rayitas son los bloques del día, siempre en el mismo orden. <span style={{ color: "var(--good)", fontFamily: "monospace", fontWeight: 800 }}>✓4</span> = cosas hechas · <span style={{ fontFamily: "monospace" }}>3</span> = planificadas · 🎂 cumple · 📝 nota · ☾ atípico. Tocá un día para abrirlo.
+        <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+          Las rayitas son los bloques del día, siempre en el mismo orden. <span style={{ color: "var(--good)", fontWeight: 700 }}>✓4</span> son cosas hechas y <span style={{ color: "var(--ink-3)" }}>3</span>, planificadas. Tocá un día para abrirlo.
         </div>
       </div>
     </div>

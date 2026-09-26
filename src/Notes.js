@@ -5,7 +5,7 @@ import {
 } from "./supabase";
 import {
   hhmm, parseYmd, todayStr, birthdayOn,
-  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet,
+  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented
 } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -17,7 +17,7 @@ function relativeDays(n) {
   return `en ${n} días`;
 }
 
-const LINK_BTN = { background: "none", border: "none", padding: "2px 4px", fontFamily: "inherit", fontSize: 12, color: "var(--ink-3)", cursor: "pointer" };
+const LINK_BTN = { background: "none", border: "none", padding: "2px 4px", fontFamily: "inherit", fontSize: 13, color: "var(--ink-3)", cursor: "pointer" };
 
 // ─── NOTAS E IDEAS ───────────────────────────────────────────
 function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
@@ -50,17 +50,17 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
         <div>
           <div style={LABEL}>Recordarme (opcional)</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", flex: 2 }} />
-            <input type="time" value={time} onChange={e => setTime(e.target.value)} disabled={!date} style={{ ...FIELD, fontFamily: "monospace", flex: 1, opacity: date ? 1 : 0.5 }} />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums", flex: 2 }} />
+            <input type="time" value={time} onChange={e => setTime(e.target.value)} disabled={!date} style={{ ...FIELD, fontVariantNumeric: "tabular-nums", flex: 1, opacity: date ? 1 : 0.5 }} />
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 5 }}>
+          <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 5 }}>
             {date ? "Aparece en la agenda ese día y te avisa (sin hora, a la hora de la mañana que elegiste en Configuración)." : "Sin fecha queda solo acá."}
           </div>
         </div>
       )}
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={{ ...GHOST_BTN, color: "var(--bad)", borderColor: "var(--bad-border)" }}>🗑</button>
+        <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={DANGER_BTN}>Eliminar</button>
         <button onClick={() => run(() => onSave({ archived: !note.archived }))} disabled={busy} style={GHOST_BTN}>
           {note.archived ? "Desarchivar" : "Archivar"}
         </button>
@@ -114,42 +114,51 @@ function NotesList({ kind }) {
   const isIdea = kind === "idea";
   return (
     <>
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 14px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="view-in" style={{ flex: 1, overflowY: "auto", padding: "4px 16px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
         {error && <div style={ERROR_BOX}>{error}</div>}
-        {notice && <div style={{ background: "var(--good-bg)", color: "var(--good)", borderRadius: 10, padding: "9px 12px", fontSize: 12.5 }}>{notice}</div>}
-        {loading && <div style={{ color: "var(--ink-3)", fontSize: 13, padding: 20, textAlign: "center" }}>Cargando…</div>}
+        {notice && <div style={{ background: "var(--good-bg)", color: "var(--good)", borderRadius: 12, padding: "12px 14px", fontSize: 15 }}>{notice}</div>}
+        {loading && <div style={{ color: "var(--ink-2)", fontSize: 15, padding: 20, textAlign: "center" }}>Cargando…</div>}
         {!loading && notes.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: "30px 10px", lineHeight: 1.6 }}>
-            {archived ? "No hay nada archivado." : isIdea ? "💡 Anotá acá lo que se te ocurra." : "📝 Notas sueltas o con fecha para que te avise."}
+          <div style={{ textAlign: "center", color: "var(--ink-2)", fontSize: 16, padding: "40px 16px", lineHeight: 1.5 }}>
+            {archived ? "No hay nada archivado." : isIdea ? "Anotá acá lo que se te ocurra." : "Notas sueltas, o con fecha para que te avise."}
           </div>
         )}
-        {notes.map(n => {
-          const past = n.note_date && n.note_date < today;
-          return (
-            <button key={n.id} onClick={() => setSheet(n)}
-              style={{ textAlign: "left", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 13, padding: "10px 12px", cursor: "pointer", fontFamily: "inherit", color: "var(--ink)", opacity: archived ? 0.6 : 1 }}>
-              <span style={{ display: "block", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.text}</span>
-              {n.note_date && (
-                <span style={{ display: "block", fontFamily: "monospace", fontSize: 10.5, marginTop: 4, color: past ? "var(--ink-3)" : n.note_date === today ? "var(--warn)" : "var(--ink-2)", fontWeight: n.note_date === today ? 700 : 400 }}>
-                  📅 {n.note_date === today ? "Hoy" : shortDate(n.note_date)}{n.remind_time ? ` · ${hhmm(n.remind_time)}` : ""}{past ? " · ya pasó" : ""}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        {notes.length > 0 && (
+          <Group>
+            {notes.map((n, i) => {
+              const past = n.note_date && n.note_date < today;
+              return (
+                <Row key={n.id} divider={i > 0} onClick={() => setSheet(n)} style={{ opacity: archived ? 0.6 : 1, alignItems: "flex-start" }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.text}</span>
+                    {n.note_date && (
+                      <span className="num" style={{ display: "block", fontSize: 13, marginTop: 3, color: n.note_date === today ? "var(--accent)" : "var(--ink-2)", fontWeight: n.note_date === today ? 600 : 400 }}>
+                        {n.note_date === today ? "Hoy" : shortDate(n.note_date)}{n.remind_time ? `, ${hhmm(n.remind_time)}` : ""}{past ? " (ya pasó)" : ""}
+                      </span>
+                    )}
+                  </span>
+                </Row>
+              );
+            })}
+          </Group>
+        )}
         {!loading && (
-          <button onClick={() => setArchived(a => !a)} style={{ ...LINK_BTN, alignSelf: "center", marginTop: 4 }}>
-            {archived ? "← Volver" : "Ver archivadas"}
+          <button onClick={() => setArchived(a => !a)} style={{ ...TEXT_BTN, fontSize: 15, alignSelf: "center" }}>
+            {archived ? "Volver" : "Ver archivadas"}
           </button>
         )}
       </div>
 
       {!archived && (
-        <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg)", padding: "8px 12px calc(10px + env(safe-area-inset-bottom))", display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "center" }}>
           <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
-            placeholder={isIdea ? "Nueva idea…" : "Nueva nota…"} style={{ ...FIELD, background: "var(--surface)" }} />
-          <button onClick={add} aria-label="Agregar"
-            style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "var(--ink)", color: "var(--bg)", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>↑</button>
+            placeholder={isIdea ? "Nueva idea" : "Nueva nota"} aria-label={isIdea ? "Nueva idea" : "Nueva nota"}
+            style={{ ...FIELD, borderRadius: 20, padding: "10px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
+          <button onClick={add} aria-label="Agregar" disabled={!text.trim()}
+            style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center", opacity: text.trim() ? 1 : 0.35, transition: "opacity 0.2s" }}>
+            <Icon name="arrowUp" size={20} stroke={2.4} />
+          </button>
         </div>
       )}
 
@@ -199,12 +208,12 @@ function BirthdaySheet({ birthday, onSave, onDelete, onClose }) {
       <div>
         <div style={LABEL}>Año de nacimiento (opcional)</div>
         <input value={year} onChange={e => setYear(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" placeholder="Ej: 1990" style={{ ...FIELD, maxWidth: 140 }} />
-        <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 5 }}>Si lo ponés, te digo cuántos cumple.</div>
+        <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 5 }}>Si lo ponés, te digo cuántos cumple.</div>
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        {birthday && <button onClick={() => run(() => onDelete(birthday.id))} disabled={busy} style={{ ...GHOST_BTN, color: "var(--bad)", borderColor: "var(--bad-border)" }}>🗑</button>}
-        <button onClick={onClose} style={{ ...GHOST_BTN, flex: 1 }}>Cancelar</button>
+        {birthday && <button onClick={() => run(() => onDelete(birthday.id))} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+        <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>Guardar</button>
       </div>
     </Sheet>
@@ -244,49 +253,45 @@ function BirthdaysList() {
   const sorted = list.map(b => ({ b, ...nextOccurrence(b, today) })).sort((x, y) => x.days - y.days);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "4px 14px 40px", display: "flex", flexDirection: "column", gap: 8 }}>
+    <div className="view-in" style={{ flex: 1, overflowY: "auto", padding: "4px 16px 40px", display: "flex", flexDirection: "column", gap: 16 }}>
       {error && <div style={ERROR_BOX}>{error}</div>}
-      {loading && <div style={{ color: "var(--ink-3)", fontSize: 13, padding: 20, textAlign: "center" }}>Cargando…</div>}
-      {!loading && list.length === 0 && (
-        <div style={{ textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: "30px 10px", lineHeight: 1.6 }}>
-          🎂 Agregá cumpleaños y te aviso ese día a la mañana.
-        </div>
-      )}
-      {sorted.map(({ b, date, days, turns }) => (
-        <button key={b.id} onClick={() => setSheet({ birthday: b })}
-          style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: days === 0 ? "var(--hl-bg)" : "var(--surface)", border: `1.5px solid ${days === 0 ? "var(--hl-border)" : "var(--border)"}`, borderRadius: 13, padding: "10px 12px", cursor: "pointer", fontFamily: "inherit", color: "var(--ink)" }}>
-          <span style={{ fontSize: 20 }}>🎂</span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 14, fontWeight: 600 }}>{b.name}</span>
-            <span style={{ display: "block", fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-2)", marginTop: 2 }}>
-              {b.day} de {MONTHS[b.month - 1]}{turns !== null ? ` · cumple ${turns}` : ""}
+      {loading && <div style={{ color: "var(--ink-2)", fontSize: 15, padding: 20, textAlign: "center" }}>Cargando…</div>}
+      <Group footer={!loading && list.length === 0 ? "Agregá cumpleaños y te aviso ese día a la mañana." : null}>
+        {sorted.map(({ b, days, turns }, i) => (
+          <Row key={b.id} divider={i > 0} onClick={() => setSheet({ birthday: b })}>
+            <span style={{ fontSize: 20 }}>🎂</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontWeight: days === 0 ? 600 : 400 }}>{b.name}</span>
+              <span className="num" style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>
+                {b.day} de {MONTHS[b.month - 1]}{turns !== null ? `, cumple ${turns}` : ""}
+              </span>
             </span>
+            <span className="num" style={{ fontSize: 15, whiteSpace: "nowrap", color: days <= 7 ? "var(--accent)" : "var(--ink-2)", fontWeight: days <= 7 ? 600 : 400 }}>
+              {relativeDays(days)}
+            </span>
+          </Row>
+        ))}
+        <Row divider={sorted.length > 0} onClick={() => setSheet({})}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--accent)" }}>
+            <Icon name="plus" size={18} stroke={2.2} /> Agregar cumpleaños
           </span>
-          <span style={{ fontFamily: "monospace", fontSize: 11, color: days <= 7 ? "var(--warn)" : "var(--ink-3)", fontWeight: days <= 7 ? 700 : 400, whiteSpace: "nowrap" }}>
-            {relativeDays(days)}
-          </span>
-        </button>
-      ))}
-      <button onClick={() => setSheet({})}
-        style={{ background: "transparent", border: "1.5px dashed var(--border)", borderRadius: 13, padding: "10px", fontFamily: "inherit", fontSize: 13, color: "var(--ink-2)", cursor: "pointer", marginTop: 4 }}>
-        + Agregar cumpleaños
-      </button>
+        </Row>
+      </Group>
       {sheet && <BirthdaySheet key={sheet.birthday?.id || "new"} birthday={sheet.birthday} onSave={save} onDelete={remove} onClose={() => setSheet(null)} />}
     </div>
   );
 }
 
 // ─── VISTA ───────────────────────────────────────────────────
-const SECTIONS = [["note", "📝 Notas"], ["idea", "💡 Ideas"], ["birthday", "🎂 Cumples"]];
+const SECTIONS = [["note", "Notas"], ["idea", "Ideas"], ["birthday", "Cumples"]];
 
 export default function NotesView() {
   const [section, setSection] = useState("note");
   return (
     <>
-      <div style={{ display: "flex", gap: 6, padding: "10px 14px 8px" }}>
-        {SECTIONS.map(([k, label]) => (
-          <button key={k} onClick={() => setSection(k)} style={{ ...CHIP(section === k), flex: 1 }}>{label}</button>
-        ))}
+      <ScreenTitle title="Notas" />
+      <div style={{ padding: "0 16px 14px" }}>
+        <Segmented label="Secciones" value={section} onChange={setSection} options={SECTIONS} />
       </div>
       {section === "birthday" ? <BirthdaysList /> : <NotesList key={section} kind={section} />}
     </>

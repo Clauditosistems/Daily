@@ -10,28 +10,32 @@ import {
   makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin,
 } from "./supabase";
 import {
-  BLOCK_TYPE, TASK_TYPES, PRIO, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
-  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, SECTION, Sheet, BlockTypePicker, PrioPicker, DayPicker,
+  BLOCK_TYPE, TASK_TYPES, PRIO, haptic, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
+  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, TEXT_BTN, ERROR_BOX, SECTION, CARD, LARGE_TITLE, Icon, Toggle,
+  Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN
 } from "./ui";
 
 // ─── TIRA SEMANAL ────────────────────────────────────────────
 function WeekStrip({ selected, today, counts, onSelect }) {
+  const letters = ["D", "L", "M", "X", "J", "V", "S"];
   return (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div style={{ display: "flex" }}>
       {weekDates(selected).map(d => {
         const date = parseYmd(d);
         const active = d === selected, isToday = d === today;
         return (
-          <button key={d} onClick={() => onSelect(d)}
-            style={{ flex: 1, minWidth: 0, padding: "6px 0 5px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
-              border: `1.5px solid ${active ? "var(--ink)" : isToday ? "var(--warn)" : "transparent"}`,
-              background: active ? "var(--ink)" : "transparent", color: active ? "var(--bg)" : "var(--ink)",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-            <span style={{ fontSize: 9, fontFamily: "monospace", textTransform: "uppercase", opacity: 0.6 }}>
-              {date.toLocaleDateString("es-AR", { weekday: "short" }).slice(0, 2)}
+          <button key={d} onClick={() => onSelect(d)} aria-pressed={active}
+            aria-label={date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+            style={{ flex: 1, minWidth: 0, background: "none", border: "none", cursor: "pointer", padding: "2px 0", fontFamily: "inherit",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: isToday ? "var(--accent)" : "var(--ink-3)" }}>{letters[date.getDay()]}</span>
+            <span className="num" style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 17, fontWeight: active || isToday ? 700 : 500, transition: "background 0.2s, color 0.2s",
+              background: active ? (isToday ? "var(--accent)" : "var(--ink)") : "transparent",
+              color: active ? (isToday ? "#fff" : "var(--bg)") : isToday ? "var(--accent)" : "var(--ink)" }}>
+              {date.getDate()}
             </span>
-            <span style={{ fontSize: 14, fontWeight: 700 }}>{date.getDate()}</span>
-            <span style={{ height: 5, width: 5, borderRadius: "50%", background: counts[d] ? (active ? "var(--bg)" : "var(--warn)") : "transparent" }} />
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: counts[d] && !active ? "var(--ink-3)" : "transparent" }} />
           </button>
         );
       })}
@@ -40,30 +44,31 @@ function WeekStrip({ selected, today, counts, onSelect }) {
 }
 
 // ─── TAREA ───────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onTap, showType }) {
+function TaskRow({ task, onToggle, onTap, showType, divider }) {
   const t = BLOCK_TYPE[task.block_type];
+  const meta = [
+    task.scheduled_time && hhmm(task.scheduled_time),
+    showType && t && `${t.icon} ${t.label}`,
+    task.routine_id && "Se repite",
+  ].filter(Boolean);
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 2px" }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 0", borderTop: divider ? "0.5px solid var(--border)" : "none" }}>
       <button onClick={() => onToggle(task)} aria-label={task.done ? "Marcar pendiente" : "Marcar hecha"}
-        style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, marginTop: 1, cursor: "pointer",
-          border: `2px solid ${task.done ? "var(--good)" : PRIO[task.prio]?.color || "var(--border)"}`,
-          background: task.done ? "var(--good)" : "transparent", color: "#fff", fontSize: 12, lineHeight: 1, padding: 0 }}>
-        {task.done ? "✓" : ""}
+        style={{ width: 24, height: 24, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0, marginTop: 0,
+          display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", transition: "background 0.2s",
+          border: task.done ? "none" : "1.6px solid var(--ink-3)", background: task.done ? "var(--good-fill)" : "transparent" }}>
+        {task.done && <span className="check-pop" style={{ display: "flex" }}><Icon name="check" size={14} stroke={3} /></span>}
       </button>
       <button onClick={() => onTap(task)}
         style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
-        <span style={{ display: "block", fontSize: 14, lineHeight: 1.45, color: task.done ? "var(--ink-3)" : "var(--ink)", textDecoration: task.done ? "line-through" : "none", wordBreak: "break-word" }}>
-          {task.scheduled_time && (
-            <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: task.done ? "var(--ink-3)" : "var(--ink)", marginRight: 6 }}>
-              {hhmm(task.scheduled_time)}
-            </span>
-          )}
+        <span style={{ display: "block", fontSize: 16, lineHeight: 1.35, wordBreak: "break-word", transition: "color 0.2s",
+          color: task.done ? "var(--ink-3)" : "var(--ink)", textDecoration: task.done ? "line-through" : "none" }}>
+          {task.prio === "high" && !task.done && <span style={{ color: "var(--prio-high)", fontWeight: 700, marginRight: 5 }}>!!</span>}
           {task.text}
         </span>
-        {(task.routine_id || (showType && t)) && (
-          <span style={{ display: "flex", gap: 8, fontFamily: "monospace", fontSize: 9.5, color: "var(--ink-3)", marginTop: 2 }}>
-            {showType && t && <span style={{ color: "var(--ink-2)" }}>{t.icon} {t.label}</span>}
-            {task.routine_id && <span>🔁 rutina</span>}
+        {meta.length > 0 && (
+          <span className="num" style={{ display: "flex", gap: 10, fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>
+            {meta.map((m, i) => <span key={i}>{m}</span>)}
           </span>
         )}
       </button>
@@ -100,7 +105,7 @@ function StuckPrompt({ task, onSplit, onMove, onRelease }) {
       )}
       {step === "move" && (
         <>
-          <input type="date" value={date} min={todayStr()} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", background: "var(--surface)" }} />
+          <input type="date" value={date} min={todayStr()} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums", background: "var(--surface)" }} />
           <button onClick={() => run(() => onMove(date))} disabled={busy || !date} style={PRIMARY_BTN}>Mover a ese día</button>
         </>
       )}
@@ -161,7 +166,7 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
         placeholder="¿Qué hay que hacer?" style={{ ...FIELD, resize: "none", lineHeight: 1.45 }} />
       <div>
         <div style={LABEL}>Día</div>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
       </div>
       <div>
         <div style={LABEL}>Tipo</div>
@@ -186,7 +191,7 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
       <div>
         <div style={LABEL}>Hora (opcional)</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", maxWidth: 140 }} />
+          <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums", maxWidth: 140 }} />
           {time && <button onClick={() => setTime("")} style={{ ...GHOST_BTN, padding: "8px 12px" }}>Sin hora</button>}
         </div>
         {time && <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 5 }}>Te llega un aviso a esa hora.</div>}
@@ -196,13 +201,13 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
         <PrioPicker value={prio} onChange={setPrio} />
       </div>
       {task.routine_id
-        ? <div style={{ fontSize: 12, color: "var(--ink-3)" }}>🔁 Esta tarea viene de una rutina. Los cambios aplican solo a este día; la rutina se edita en la pestaña Rutinas.</div>
+        ? <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Esta tarea viene de una rutina. Los cambios aplican solo a este día; la rutina se edita en la pestaña Rutinas.</div>
         : (
           <div>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
-              <input type="checkbox" checked={repeat} onChange={e => setRepeat(e.target.checked)} style={{ width: 16, height: 16 }} />
-              🔁 Repetir (convertir en rutina)
-            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ flex: 1, fontSize: 16 }}>Repetir<span style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>La convierte en rutina.</span></span>
+              <Toggle label="Repetir" checked={repeat} onChange={setRepeat} />
+            </div>
             {repeat && (
               <div style={{ marginTop: 10 }}>
                 <DayPicker value={repeatDays} onToggle={toggleRepeatDay} />
@@ -213,8 +218,8 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
         )}
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        {!isNew && <button onClick={remove} disabled={busy} style={{ ...GHOST_BTN, color: "var(--bad)", borderColor: "var(--bad-border)" }}>🗑</button>}
-        <button onClick={onClose} style={{ ...GHOST_BTN, flex: 1 }}>Cancelar</button>
+        {!isNew && <button onClick={remove} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+        <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Guardar"}</button>
       </div>
     </Sheet>
@@ -226,37 +231,37 @@ function BlockCard({ block, tasks, isNow, started, done, onAdd, onEditDay, onTog
   const t = BLOCK_TYPE[block.block_type] || BLOCK_TYPE.otro;
   const isOcio = block.block_type === "ocio";
   return (
-    <div style={{ background: "var(--surface)", border: `1.5px solid ${isNow ? t.color : "var(--border)"}`, borderLeft: `5px ${block.floating ? "dashed" : "solid"} ${t.color}`, borderRadius: 15, padding: "10px 12px 6px" }}>
-      <button onClick={() => onEditDay(block)} aria-label="Opciones de este bloque para este día"
-        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: "inherit", textAlign: "left" }}>
-        <span style={{ fontSize: 16 }}>{t.icon}</span>
-        <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{block.label || t.label}</span>
-        {isNow && <span style={{ fontFamily: "monospace", fontSize: 9, fontWeight: 700, color: "var(--bg)", background: "var(--ink)", borderRadius: 6, padding: "2px 6px" }}>AHORA</span>}
-        {!isOcio && done && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--good)" }}>✓ Cumplido</span>}
-        <span style={{ fontFamily: "monospace", fontSize: 11, color: block.overridden ? "var(--warn)" : "var(--ink-2)", fontWeight: block.overridden ? 700 : 400 }}>
-          {block.overridden ? "✎ " : ""}{block.floating ? "~" : ""}{hhmm(block.start_time)}–{hhmm(block.end_time)}
+    <section style={{ ...CARD, position: "relative", overflow: "hidden", padding: "14px 16px 4px 20px",
+      boxShadow: isNow ? "var(--shadow-card), inset 0 0 0 1.5px var(--accent)" : CARD.boxShadow }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 14, bottom: 14, width: 4, borderRadius: "0 3px 3px 0",
+        background: t.color, opacity: block.floating ? 0.45 : 1 }} />
+      <button onClick={() => onEditDay(block)} aria-label={`Opciones de ${block.label || t.label} para este día`}
+        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: "0 0 4px", cursor: "pointer", fontFamily: "inherit", color: "inherit", textAlign: "left" }}>
+        <span style={{ fontSize: 17 }}>{t.icon}</span>
+        <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 17, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{block.label || t.label}</span>
+        {isNow && <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", background: "var(--accent-soft)", borderRadius: 999, padding: "3px 9px" }}>Ahora</span>}
+        {!isOcio && done && !isNow && <span style={{ display: "flex", color: "var(--good)" }} aria-label="Cumplido"><Icon name="check" size={17} stroke={2.4} /></span>}
+        <span className="num" style={{ fontSize: 15, color: block.overridden ? "var(--warn)" : "var(--ink-2)" }}>
+          {block.floating ? "~" : ""}{hhmm(block.start_time)}–{hhmm(block.end_time)}
         </span>
       </button>
       {isOcio ? (
-        <div style={{ fontSize: 13, color: "var(--ink-2)", padding: "6px 0 6px" }}>Tiempo libre. Está en el plan.</div>
+        <div style={{ fontSize: 15, color: "var(--ink-2)", padding: "4px 0 12px" }}>Tiempo libre. Está en el plan.</div>
       ) : <>
-        <div style={{ marginTop: 4 }}>
-          {tasks.map(task => <TaskRow key={task.id} task={task} onToggle={onToggle} onTap={onTap} />)}
+        <div>
+          {tasks.map((task, i) => <TaskRow key={task.id} task={task} onToggle={onToggle} onTap={onTap} divider={i > 0} />)}
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 0" }}>
-          <button onClick={() => onAdd(block)}
-            style={{ background: "none", border: "none", color: "var(--ink-2)", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 0" }}>
-            + Tarea
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: tasks.length ? "0.5px solid var(--border)" : "none" }}>
+          <button onClick={() => onAdd(block)} style={{ ...TEXT_BTN, fontSize: 15, display: "flex", alignItems: "center", gap: 4, padding: "10px 0" }}>
+            <Icon name="plus" size={18} stroke={2.2} /> Tarea
           </button>
           {started && !done && (
-            <button onClick={() => onCheckin(block, true)}
-              style={{ background: "none", border: "none", color: "var(--good)", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "6px 0" }}>
-              ✓ Estuve
-            </button>
+            <button onClick={() => onCheckin(block, true)} style={{ ...TEXT_BTN, fontSize: 15, color: "var(--good)", padding: "10px 0" }}>Estuve</button>
           )}
+          {done && <span style={{ fontSize: 13, color: "var(--good)", fontWeight: 600 }}>Cumplido</span>}
         </div>
       </>}
-    </div>
+    </section>
   );
 }
 
@@ -287,18 +292,18 @@ function BlockDaySheet({ block, date, started, checked, onCheckin, onDone, onClo
       {!isOcio && started && (
         <button onClick={() => run(() => onCheckin(block, !checked))} disabled={busy}
           style={{ ...GHOST_BTN, color: checked ? "var(--ink-2)" : "var(--good)", borderColor: checked ? "var(--border)" : "var(--good)", fontWeight: 700 }}>
-          {checked ? "Quitar \"✓ Estuve\"" : "✓ Estuve en este bloque"}
+          {checked ? "Quitar \"Estuve\"" : "Estuve en este bloque"}
         </button>
       )}
       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>Estos cambios aplican solo a este día. Tu semana tipo no se toca.</div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <div style={LABEL}>Desde</div>
-          <input type="time" value={start} onChange={e => setStart(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
+          <input type="time" value={start} onChange={e => setStart(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
         </div>
         <div style={{ flex: 1 }}>
           <div style={LABEL}>Hasta</div>
-          <input type="time" value={end} onChange={e => setEnd(e.target.value)} style={{ ...FIELD, fontFamily: "monospace" }} />
+          <input type="time" value={end} onChange={e => setEnd(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
         </div>
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
@@ -337,7 +342,7 @@ function AtypicalSheet({ date, onDone, onClose }) {
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={onClose} style={{ ...GHOST_BTN, flex: 1 }}>Cancelar</button>
+        <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Marcar atípico"}</button>
       </div>
     </Sheet>
@@ -358,17 +363,21 @@ function Composer({ types, onAdd }) {
   }
 
   return (
-    <div style={{ borderTop: "1px solid var(--border)", background: "var(--bg)", padding: "8px 12px calc(10px + env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", gap: 7 }}>
-      {types.length > 0 && (
-        <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" }}>
+    <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      {types.length > 0 && text.trim() && (
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
           <BlockTypePicker value={blockType} onChange={setBlockType} allowNone types={types} />
         </div>
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
-          placeholder="Agregar tarea a este día…" style={{ ...FIELD, background: "var(--surface)" }} />
-        <button onClick={send} disabled={busy} aria-label="Agregar"
-          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "var(--ink)", color: "var(--bg)", fontSize: 16, cursor: "pointer", flexShrink: 0, opacity: busy ? 0.6 : 1 }}>↑</button>
+          placeholder="Nueva tarea" aria-label="Nueva tarea para este día"
+          style={{ ...FIELD, borderRadius: 20, padding: "10px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
+        <button onClick={send} disabled={busy || !text.trim()} aria-label="Agregar"
+          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center", opacity: busy || !text.trim() ? 0.35 : 1, transition: "opacity 0.2s" }}>
+          <Icon name="arrowUp" size={20} stroke={2.4} />
+        </button>
       </div>
     </div>
   );
@@ -388,20 +397,29 @@ const firstOfMonth = (s, n = 0) => { const d = parseYmd(s); return ymd(new Date(
 function DayProgress({ tasks }) {
   if (!tasks.length) return null;
   const done = tasks.filter(t => t.done).length;
-  if (done === 0) {
-    return <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--ink-2)", textAlign: "center" }}>{tasks.length} cosa{tasks.length === 1 ? "" : "s"} para hoy</div>;
-  }
+  if (done === 0) return <div className="num" style={{ fontSize: 15, color: "var(--ink-2)" }}>{tasks.length} cosa{tasks.length === 1 ? "" : "s"} para hoy</div>;
   const pct = Math.round((done / tasks.length) * 100);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div role="img" aria-label={`${done} hechas`} style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: "var(--good)", borderRadius: 4, transition: "width 0.3s" }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div role="img" aria-label={`${done} hechas`} style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: "var(--good-fill)", borderRadius: 2, transition: "width 0.5s var(--ease-spring)" }} />
       </div>
-      <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "var(--good)", fontWeight: 700, whiteSpace: "nowrap" }}>
-        {done === tasks.length ? "✓ todo hecho" : `${done} hecha${done === 1 ? "" : "s"} ✓`}
+      <span className="num" style={{ fontSize: 15, color: "var(--good)", fontWeight: 600, whiteSpace: "nowrap" }}>
+        {done === tasks.length ? "Todo hecho" : `${done} hecha${done === 1 ? "" : "s"}`}
       </span>
     </div>
   );
+}
+
+// Título grande: "Hoy" / "Mañana" / "Ayer", o "Martes 29"; debajo la fecha completa o el mes.
+function dayHeading(s, today) {
+  const d = parseYmd(s);
+  const rel = s === today ? "Hoy" : s === addDays(today, 1) ? "Mañana" : s === addDays(today, -1) ? "Ayer" : null;
+  const wd = d.toLocaleDateString("es-AR", { weekday: "long" });
+  const full = d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  return rel
+    ? { title: rel, subtitle: full.charAt(0).toUpperCase() + full.slice(1) }
+    : { title: `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${d.getDate()}`, subtitle: d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }).replace(/^./, c => c.toUpperCase()) };
 }
 
 export default function AgendaView({ forceMode }) {
@@ -492,6 +510,7 @@ export default function AgendaView({ forceMode }) {
   }
 
   async function toggle(task) {
+    if (!task.done) haptic();
     try { applyTask(await updateTask(task.id, { done: !task.done })); refreshCounts(); }
     catch (err) { setError(err.message); }
   }
@@ -508,6 +527,7 @@ export default function AgendaView({ forceMode }) {
   }
 
   async function checkin(block, on) {
+    if (on) haptic();
     try {
       await setCheckin(block.block_id, selected, on);
       setCheckins(p => on ? [...p, block.block_id] : p.filter(x => x !== block.block_id));
@@ -563,42 +583,43 @@ export default function AgendaView({ forceMode }) {
 
   return (
     <>
-      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-soft)", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div role="tablist" aria-label="Vista de la agenda" style={{ display: "flex", background: "var(--surface-2)", borderRadius: 10, padding: 3 }}>
+      <div style={{ padding: "12px 16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div role="tablist" aria-label="Vista de la agenda" style={{ display: "flex", background: "var(--surface-3)", borderRadius: 9, padding: 2 }}>
           {MODES.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
-              style={{ flex: 1, padding: "5px 0", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12,
-                fontWeight: mode === k ? 700 : 500, background: mode === k ? "var(--surface)" : "transparent",
-                color: mode === k ? "var(--ink)" : "var(--ink-2)", boxShadow: mode === k ? "0 1px 2px rgba(0,0,0,0.12)" : "none" }}>
+              style={{ flex: 1, padding: "6px 0", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+                fontWeight: mode === k ? 600 : 500, color: "var(--ink)", transition: "background 0.25s var(--ease-sheet)",
+                background: mode === k ? "var(--surface)" : "transparent",
+                boxShadow: mode === k ? "0 3px 8px rgba(0,0,0,0.12), 0 3px 1px rgba(0,0,0,0.04)" : "none" }}>
               {label}
             </button>
           ))}
         </div>
         {mode === "ahora" ? null : mode === "mes" ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button onClick={() => setMonthAnchor(firstOfMonth(monthAnchor, -1))} aria-label="Mes anterior" style={NAV_BTN}>‹</button>
-            <div style={{ flex: 1, textAlign: "center", fontWeight: 800, fontSize: 15 }}>{monthTitle(monthAnchor)}</div>
-            <button onClick={() => setMonthAnchor(firstOfMonth(monthAnchor, 1))} aria-label="Mes siguiente" style={NAV_BTN}>›</button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={LARGE_TITLE}>{monthTitle(monthAnchor)}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setMonthAnchor(firstOfMonth(monthAnchor, -1))} aria-label="Mes anterior" style={NAV_BTN}><Icon name="left" size={18} stroke={2.2} /></button>
+              <button onClick={() => setMonthAnchor(firstOfMonth(monthAnchor, 1))} aria-label="Mes siguiente" style={NAV_BTN}><Icon name="right" size={18} stroke={2.2} /></button>
+            </div>
           </div>
         ) : <>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button onClick={() => setSelected(addDays(selected, -1))} aria-label="Día anterior" style={NAV_BTN}>‹</button>
-          <div style={{ flex: 1, textAlign: "center", fontWeight: 800, fontSize: 15 }}>{dayTitle(selected)}</div>
-          <button onClick={() => setSelected(addDays(selected, 1))} aria-label="Día siguiente" style={NAV_BTN}>›</button>
-        </div>
-        <WeekStrip selected={selected} today={today} counts={counts} onSelect={setSelected} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 16 }}>
-          <button onClick={() => setSelected(addDays(selected, -7))} style={LINK_BTN}>‹ semana</button>
-          {!isToday && <button onClick={() => setSelected(today)} style={{ ...LINK_BTN, fontWeight: 700, color: "var(--warn)" }}>Volver a hoy</button>}
-          {!dayOverride && selected >= today && (
-            <button onClick={() => setAtypicalSheet(true)} style={LINK_BTN}>☾ día atípico</button>
-          )}
-          <button onClick={() => setSelected(addDays(selected, 7))} style={LINK_BTN}>semana ›</button>
-        </div>
-        <DayProgress tasks={shownTasks} />
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={LARGE_TITLE}>{dayHeading(selected, today).title}</div>
+              <div style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 4 }}>{dayHeading(selected, today).subtitle}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {!isToday && <button onClick={() => setSelected(today)} style={{ ...LINK_BTN, fontWeight: 600, marginRight: 4 }}>Hoy</button>}
+              <button onClick={() => setSelected(addDays(selected, -7))} aria-label="Semana anterior" style={NAV_BTN}><Icon name="left" size={18} stroke={2.2} /></button>
+              <button onClick={() => setSelected(addDays(selected, 7))} aria-label="Semana siguiente" style={NAV_BTN}><Icon name="right" size={18} stroke={2.2} /></button>
+            </div>
+          </div>
+          <WeekStrip selected={selected} today={today} counts={counts} onSelect={setSelected} />
+          <DayProgress tasks={shownTasks} />
         </>}
         {mode === "mes" && firstOfMonth(today) !== monthAnchor && (
-          <button onClick={() => setMonthAnchor(firstOfMonth(today))} style={{ ...LINK_BTN, alignSelf: "center", fontWeight: 700, color: "var(--warn)" }}>Volver a este mes</button>
+          <button onClick={() => setMonthAnchor(firstOfMonth(today))} style={{ ...LINK_BTN, alignSelf: "flex-start", fontWeight: 600 }}>Volver a este mes</button>
         )}
       </div>
 
@@ -619,40 +640,40 @@ export default function AgendaView({ forceMode }) {
 
       {mode === "dia" && (
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px 24px", display: "flex", flexDirection: "column", gap: 10, opacity: loading ? 0.55 : 1, transition: "opacity 0.15s" }}>
+      <div className="view-in" key={`dia-${selected}`} style={{ flex: 1, overflowY: "auto", padding: "4px 16px 28px", display: "flex", flexDirection: "column", gap: 12, opacity: loading ? 0.55 : 1, transition: "opacity 0.2s" }}>
         {error && <div style={ERROR_BOX}>{error}</div>}
 
         {(dayBirthdays.length > 0 || dayNotes.length > 0) && (
-          <div style={{ background: "var(--hl-bg)", border: "1.5px solid var(--hl-border)", borderRadius: 15, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-            {dayBirthdays.map(b => (
-              <div key={b.id} style={{ fontSize: 14 }}>
-                🎂 <b>Cumple de {b.name}</b>
-                {b.year && <span style={{ color: "var(--ink-3)" }}> · {year - b.year} años</span>}
+          <div style={{ ...CARD, padding: "4px 16px" }}>
+            {dayBirthdays.map((b, i) => (
+              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i ? "0.5px solid var(--border)" : "none" }}>
+                <span style={{ fontSize: 20 }}>🎂</span>
+                <span style={{ flex: 1, fontSize: 16 }}>Cumple de {b.name}</span>
+                {b.year && <span className="num" style={{ fontSize: 15, color: "var(--ink-2)" }}>{year - b.year} años</span>}
               </div>
             ))}
-            {dayNotes.map(n => (
-              <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 14 }}>
-                <span>📝</span>
-                <span style={{ flex: 1, wordBreak: "break-word" }}>
-                  {n.remind_time && <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, marginRight: 6 }}>{hhmm(n.remind_time)}</span>}
+            {dayNotes.map((n, i) => (
+              <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i || dayBirthdays.length ? "0.5px solid var(--border)" : "none" }}>
+                <span style={{ fontSize: 20 }}>📝</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 16, wordBreak: "break-word" }}>
                   {n.text}
+                  {n.remind_time && <span className="num" style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>{hhmm(n.remind_time)}</span>}
                 </span>
-                <button onClick={() => archiveNote(n)} style={{ ...LINK_BTN, color: "var(--good)", fontWeight: 700 }}>✓ listo</button>
+                <button onClick={() => archiveNote(n)} style={{ ...TEXT_BTN, fontSize: 15 }}>Listo</button>
               </div>
             ))}
           </div>
         )}
 
-        {notice && <div style={{ background: "var(--good-bg)", color: "var(--good)", borderRadius: 10, padding: "9px 12px", fontSize: 12.5 }}>{notice}</div>}
+        {notice && <div style={{ background: "var(--good-bg)", color: "var(--good)", borderRadius: 12, padding: "12px 14px", fontSize: 15 }}>{notice}</div>}
 
         {dayOverride && (
-          <div style={{ background: "var(--surface-2)", border: "1.5px dashed var(--ink-3)", borderRadius: 15, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 20 }}>☾</span>
-            <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
-              <b>Día atípico</b>{dayOverride.note ? `: ${dayOverride.note}` : ""}
-              <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>Sin bloques. Las tareas que se movieron no vuelven solas.</span>
+          <div style={{ ...CARD, padding: "16px", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ flex: 1, lineHeight: 1.4 }}>
+              <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>Día atípico{dayOverride.note ? `: ${dayOverride.note}` : ""}</span>
+              <span style={{ display: "block", fontSize: 14, color: "var(--ink-2)", marginTop: 2 }}>Los bloques de hoy quedan en pausa.</span>
             </span>
-            <button onClick={undoAtypical} style={{ ...LINK_BTN, color: "var(--ink)", fontWeight: 700 }}>Deshacer</button>
+            <button onClick={undoAtypical} style={{ ...TEXT_BTN, fontSize: 15 }}>Deshacer</button>
           </div>
         )}
 
@@ -661,10 +682,9 @@ export default function AgendaView({ forceMode }) {
             {cancelled.map(c => {
               const wb = c.weekly_blocks, t = BLOCK_TYPE[wb?.block_type] || BLOCK_TYPE.otro;
               return (
-                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-3)", padding: "0 4px" }}>
-                  <span style={{ textDecoration: "line-through", flex: 1 }}>{t.icon} {wb?.label || t.label} {hhmm(wb?.start_time)}–{hhmm(wb?.end_time)}</span>
-                  <span>cancelado</span>
-                  <button onClick={() => restoreBlock(c.block_id)} style={{ ...LINK_BTN, color: "var(--ink)" }}>Restaurar</button>
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "var(--ink-2)", padding: "0 4px" }}>
+                  <span style={{ flex: 1 }}>{t.icon} {wb?.label || t.label} <span className="num">{hhmm(wb?.start_time)}–{hhmm(wb?.end_time)}</span>, cancelado hoy</span>
+                  <button onClick={() => restoreBlock(c.block_id)} style={{ ...TEXT_BTN, fontSize: 14 }}>Restaurar</button>
                 </div>
               );
             })}
@@ -672,8 +692,8 @@ export default function AgendaView({ forceMode }) {
         )}
 
         {!loading && !dayOverride && blocks.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: "18px 10px", lineHeight: 1.6 }}>
-            No hay bloques este día.<br /><span style={{ fontSize: 11.5 }}>Los configurás tocando "Daily" arriba a la izquierda.</span>
+          <div style={{ textAlign: "center", color: "var(--ink-2)", fontSize: 15, padding: "28px 16px", lineHeight: 1.5 }}>
+            No hay bloques este día.<br />Los armás en Configuración, con el engranaje de arriba.
           </div>
         )}
 
@@ -689,10 +709,16 @@ export default function AgendaView({ forceMode }) {
         ))}
 
         {loose.length > 0 && (
-          <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 15, padding: "10px 12px 6px" }}>
-            <div style={{ ...SECTION, color: "var(--ink-2)", padding: 0 }}>Sin bloque</div>
-            {loose.map(t => <TaskRow key={t.id} task={t} onToggle={toggle} onTap={setSheet} showType />)}
-          </div>
+          <section style={{ ...CARD, padding: "14px 16px 4px" }}>
+            <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", paddingBottom: 4 }}>Sin bloque</div>
+            {loose.map((t, i) => <TaskRow key={t.id} task={t} onToggle={toggle} onTap={setSheet} showType divider={i > 0} />)}
+          </section>
+        )}
+
+        {!dayOverride && selected >= today && (
+          <button onClick={() => setAtypicalSheet(true)} style={{ ...TEXT_BTN, fontSize: 15, color: "var(--ink-2)", alignSelf: "center", marginTop: 4 }}>
+            Marcar como día atípico
+          </button>
         )}
       </div>
 
@@ -717,5 +743,6 @@ export default function AgendaView({ forceMode }) {
   );
 }
 
-const NAV_BTN = { width: 34, height: 34, borderRadius: "50%", border: "1.5px solid var(--border)", background: "transparent", fontSize: 18, lineHeight: 1, cursor: "pointer", color: "var(--ink)", fontFamily: "inherit" };
-const LINK_BTN = { background: "none", border: "none", padding: "2px 4px", fontFamily: "inherit", fontSize: 11.5, color: "var(--ink-3)", cursor: "pointer", whiteSpace: "nowrap" };
+const NAV_BTN = { width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--surface)", boxShadow: "var(--shadow-card)", cursor: "pointer",
+  color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
+const LINK_BTN = { background: "none", border: "none", padding: "2px 0", fontFamily: "inherit", fontSize: 15, color: "var(--accent)", cursor: "pointer", whiteSpace: "nowrap" };

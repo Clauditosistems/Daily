@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { sendMagicLink } from "./supabase";
-import { FIELD, PRIMARY_BTN } from "./ui";
+import { FIELD, PRIMARY_BTN, LARGE_TITLE } from "./ui";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -18,21 +18,22 @@ export default function Login() {
   }
 
   return (
-    <div style={{ padding: "40px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ fontSize: 28 }}>🗓</div>
-      <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.5px" }}>Entrá a Daily</div>
-      <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
-        Tus bloques y tareas se guardan en la nube. Poné tu mail: te llega un link, lo tocás y listo.
+    <div className="view-in" style={{ flex: 1, padding: "48px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <div style={LARGE_TITLE}>Daily</div>
+        <div style={{ fontSize: 16, color: "var(--ink-2)", lineHeight: 1.5, marginTop: 10 }}>
+          Tus bloques y tareas se guardan en la nube. Poné tu mail: te llega un link, lo tocás y entrás.
+        </div>
       </div>
       {sent
-        ? <div style={{ background: "var(--good-bg)", border: "1.5px solid var(--good)", color: "var(--good)", borderRadius: 12, padding: "12px 14px", fontSize: 13, lineHeight: 1.5 }}>
-            Te mandamos un link a <b>{email}</b>. Abrilo desde este mismo dispositivo.
+        ? <div style={{ background: "var(--good-bg)", color: "var(--good)", borderRadius: 14, padding: "14px 16px", fontSize: 15, lineHeight: 1.5 }}>
+            Te mandamos un link a <b>{email}</b>. Abrilo desde este mismo celu.
           </div>
-        : <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@mail.com" style={FIELD} autoComplete="email" />
+        : <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@mail.com" aria-label="Tu mail" style={{ ...FIELD, background: "var(--surface)", boxShadow: "var(--shadow-card)", padding: "14px 16px" }} autoComplete="email" />
             <button type="submit" disabled={busy} style={{ ...PRIMARY_BTN, opacity: busy ? 0.6 : 1 }}>{busy ? "Enviando…" : "Mandarme el link"}</button>
           </form>}
-      {error && <div style={{ color: "var(--bad)", fontSize: 12 }}>{error}</div>}
+      {error && <div style={{ color: "var(--bad)", fontSize: 14 }}>{error}</div>}
     </div>
   );
 }

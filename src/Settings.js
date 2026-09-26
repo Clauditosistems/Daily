@@ -3,26 +3,14 @@ import {
   supabase, fetchSettings, updateSettings,
   localTasksToMigrate, migrateLocalTasks, localNotesToMigrate, migrateLocalNotes,
 } from "./supabase";
-import { hhmm, FIELD, CHIP, GHOST_BTN, ERROR_BOX, SECTION } from "./ui";
+import {
+  hhmm, ERROR_BOX, GHOST_BTN, DANGER_BTN, Group, Row, Toggle, Segmented, ScreenTitle, useBackHandler, hapticsOn, setHaptics, haptic,
+} from "./ui";
 import BlocksView from "./Blocks";
 import PushSettings from "./PushSettings";
 
-const CARD = { background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 };
-
-function Toggle({ checked, onChange, label, hint, disabled }) {
-  return (
-    <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 }}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} style={{ width: 16, height: 16, marginTop: 2 }} />
-      <span style={{ fontSize: 13.5, lineHeight: 1.4 }}>
-        {label}
-        {hint && <span style={{ display: "block", fontSize: 11.5, color: "var(--ink-3)" }}>{hint}</span>}
-      </span>
-    </label>
-  );
-}
-
 // Tema: "auto" sigue al celu; "light"/"dark" se fuerzan con data-theme (ver theme.css e index.html).
-const THEME_BG = { light: "#f5f2ec", dark: "#141311" };
+const THEME_BG = { light: "#f2f2f7", dark: "#111113" };
 
 function readTheme() {
   try { return localStorage.getItem("daily-theme") || "auto"; } catch { return "auto"; }
@@ -39,17 +27,30 @@ function applyTheme(theme) {
 
 function Appearance() {
   const [theme, setTheme] = useState(readTheme);
-  const choose = t => { setTheme(t); applyTheme(t); };
+  const [vibrate, setVibrate] = useState(hapticsOn);
   return (
-    <div style={CARD}>
-      <div style={{ fontWeight: 700, fontSize: 14 }}>Apariencia</div>
-      <div style={{ display: "flex", gap: 6 }}>
-        {[["auto", "Automático"], ["light", "☀ Claro"], ["dark", "☾ Oscuro"]].map(([k, label]) => (
-          <button key={k} onClick={() => choose(k)} style={{ ...CHIP(theme === k), flex: 1 }}>{label}</button>
-        ))}
+    <Group header="Apariencia" footer="Automático sigue el modo del celu.">
+      <div style={{ padding: 12 }}>
+        <Segmented label="Tema" value={theme} onChange={t => { setTheme(t); applyTheme(t); }}
+          options={[["auto", "Automático"], ["light", "Claro"], ["dark", "Oscuro"]]} />
       </div>
-      <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>Automático sigue el modo del celu.</div>
-    </div>
+      <Row divider>
+        <span style={{ flex: 1 }}>Vibrar al completar</span>
+        <Toggle label="Vibrar al completar" checked={vibrate} onChange={v => { setVibrate(v); setHaptics(v); if (v) haptic(); }} />
+      </Row>
+    </Group>
+  );
+}
+
+function PrefRow({ label, hint, checked, onChange, disabled, divider }) {
+  return (
+    <Row divider={divider}>
+      <span style={{ flex: 1, minWidth: 0, opacity: disabled ? 0.45 : 1 }}>
+        {label}
+        {hint && <span style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>{hint}</span>}
+      </span>
+      <Toggle label={label} checked={checked} onChange={onChange} disabled={disabled} />
+    </Row>
   );
 }
 
@@ -67,26 +68,34 @@ function NotificationPrefs() {
   }
 
   if (!prefs) return error ? <div style={ERROR_BOX}>{error}</div> : null;
+  const rows = [
+    ["notify_blocks", "Al empezar cada bloque", "Con una tarea para arrancar."],
+    ["notify_midblock", "A mitad de bloques largos", "Un empujoncito en bloques de más de 90 minutos."],
+    ["notify_ocio", "Tiempo libre", "Cuando empieza y cuando termina."],
+    ["notify_dayclose", "Cierre del día", "Lo que hiciste y con qué arrancás mañana."],
+    ["notify_tasks", "A la hora de una tarea", "Solo las que tienen hora."],
+    ["notify_weekly", "Resumen del domingo", "Domingo a las 20."],
+  ];
   return (
-    <div style={CARD}>
-      <div style={{ fontWeight: 700, fontSize: 14 }}>Qué avisos querés</div>
-      <Toggle checked={prefs.notify_blocks} onChange={v => change("notify_blocks", v)} label="Al empezar cada bloque" hint="Con una tarea para arrancar." />
-      <Toggle checked={prefs.notify_midblock} onChange={v => change("notify_midblock", v)} label="A mitad de bloques largos" hint="Un empujoncito en bloques de más de 90 minutos." />
-      <Toggle checked={prefs.notify_ocio} onChange={v => change("notify_ocio", v)} label="Tiempo libre" hint="Cuando empieza y cuando termina el ocio." />
-      <Toggle checked={prefs.notify_dayclose} onChange={v => change("notify_dayclose", v)} label="Cierre del día" hint="Lo que hiciste y con qué arrancás mañana." />
-      <Toggle checked={prefs.notify_tasks} onChange={v => change("notify_tasks", v)} label="A la hora de una tarea" hint="Solo las que tienen hora." />
-      <Toggle checked={prefs.notify_birthdays} onChange={v => change("notify_birthdays", v)} label="Cumpleaños" />
-      <Toggle checked={prefs.birthday_day_before} onChange={v => change("birthday_day_before", v)} disabled={!prefs.notify_birthdays}
-        label="Avisarme también el día antes del cumple" />
-      <Toggle checked={prefs.notify_weekly} onChange={v => change("notify_weekly", v)} label="Resumen del domingo" hint="Domingo a las 20." />
-      <div>
-        <div style={{ fontSize: 13.5, marginBottom: 6 }}>Hora de los avisos de la mañana</div>
-        <input type="time" value={hhmm(prefs.morning_time)} onChange={e => e.target.value && change("morning_time", e.target.value)}
-          style={{ ...FIELD, fontFamily: "monospace", maxWidth: 140 }} />
-        <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 5 }}>Cumpleaños y notas con fecha pero sin hora.</div>
-      </div>
+    <>
+      <Group header="Qué avisos querés">
+        {rows.map(([key, label, hint], i) => (
+          <PrefRow key={key} divider={i > 0} label={label} hint={hint} checked={prefs[key]} onChange={v => change(key, v)} />
+        ))}
+      </Group>
+      <Group header="Cumpleaños y notas" footer="Los cumpleaños y las notas con fecha pero sin hora avisan a la hora de la mañana.">
+        <PrefRow label="Cumpleaños" checked={prefs.notify_birthdays} onChange={v => change("notify_birthdays", v)} />
+        <PrefRow divider label="También el día antes" checked={prefs.birthday_day_before} disabled={!prefs.notify_birthdays}
+          onChange={v => change("birthday_day_before", v)} />
+        <Row divider>
+          <span style={{ flex: 1 }}>Hora de la mañana</span>
+          <input type="time" value={hhmm(prefs.morning_time)} onChange={e => e.target.value && change("morning_time", e.target.value)}
+            aria-label="Hora de los avisos de la mañana" className="num"
+            style={{ border: "none", background: "var(--surface-2)", borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: "inherit", color: "var(--ink)" }} />
+        </Row>
+      </Group>
       {error && <div style={ERROR_BOX}>{error}</div>}
-    </div>
+    </>
   );
 }
 
@@ -107,67 +116,62 @@ function LocalData() {
     setBusy(true); setStatus("");
     try {
       const [t, n] = [await migrateLocalTasks(), await migrateLocalNotes()];
-      setStatus(`✓ Listo: ${t} tareas y ${n} notas/ideas. Si ya estaban subidas, no se duplican.`);
+      setStatus(`Listo: ${t} tareas y ${n} notas o ideas. Si ya estaban subidas, no se duplican.`);
     } catch (err) { setStatus(`Error: ${err.message}`); }
     finally { setBusy(false); }
   }
 
   return (
-    <div style={CARD}>
-      <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-        En este dispositivo hay <b>{counts.tasks}</b> tareas con fecha y <b>{counts.notes}</b> notas, ideas o planes de la versión anterior. Los adjuntos no se suben.
+    <Group header="Datos de la versión anterior" footer={status || "Los adjuntos no se suben."}>
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 15, lineHeight: 1.45 }}>
+          En este dispositivo hay {counts.tasks} tareas con fecha y {counts.notes} notas, ideas o planes.
+        </div>
+        <button onClick={migrate} disabled={busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>{busy ? "Subiendo…" : "Subir a la nube"}</button>
       </div>
-      <button onClick={migrate} disabled={busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>{busy ? "Subiendo…" : "Subir a la nube"}</button>
-      {status && <div style={{ fontSize: 12, color: status.startsWith("Error") ? "var(--bad)" : "var(--good)" }}>{status}</div>}
-    </div>
+    </Group>
   );
 }
 
 export default function SettingsView({ session, onClose }) {
   const [screen, setScreen] = useState("main");  // "main" | "blocks"
-
-  const header = (title, back) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px 6px" }}>
-      <button onClick={back} aria-label="Volver"
-        style={{ width: 34, height: 34, borderRadius: "50%", border: "1.5px solid var(--border)", background: "transparent", fontSize: 16, cursor: "pointer", color: "var(--ink)" }}>←</button>
-      <span style={{ fontWeight: 800, fontSize: 16 }}>{title}</span>
-    </div>
-  );
+  useBackHandler(screen === "blocks", () => setScreen("main"));
 
   if (screen === "blocks") {
-    return <>{header("Bloques de la semana", () => setScreen("main"))}<BlocksView /></>;
+    return (
+      <>
+        <ScreenTitle title="Tu semana" subtitle="Se repite todas las semanas." back={() => setScreen("main")} backLabel="Configuración" />
+        <BlocksView />
+      </>
+    );
   }
 
   return (
     <>
-      {header("Configuración", onClose)}
-      <div style={{ flex: 1, overflowY: "auto", padding: "6px 14px 40px", display: "flex", flexDirection: "column", gap: 10 }}>
-        <button onClick={() => setScreen("blocks")}
-          style={{ ...CARD, flexDirection: "row", alignItems: "center", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: "var(--ink)" }}>
-          <span style={{ fontSize: 20 }}>🗓</span>
-          <span style={{ flex: 1 }}>
-            <span style={{ display: "block", fontWeight: 700, fontSize: 14 }}>Bloques de la semana</span>
-            <span style={{ display: "block", fontSize: 12, color: "var(--ink-3)" }}>Agregar, cambiar o borrar tu semana tipo</span>
-          </span>
-          <span style={{ color: "var(--ink-3)", fontSize: 18 }}>›</span>
-        </button>
+      <ScreenTitle title="Configuración" back={onClose} backLabel="Agenda" />
+      <div className="view-in" style={{ flex: 1, overflowY: "auto", padding: "4px 16px 40px", display: "flex", flexDirection: "column", gap: 24 }}>
+        <Group>
+          <Row onClick={() => setScreen("blocks")} chevron>
+            <span style={{ flex: 1 }}>
+              Bloques de la semana
+              <span style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>Tu semana tipo: agregar, cambiar o borrar</span>
+            </span>
+          </Row>
+        </Group>
 
-        <Appearance />
-
-        <div style={{ ...SECTION, color: "var(--ink-2)" }}>Notificaciones</div>
         <PushSettings />
         <NotificationPrefs />
-
+        <Appearance />
         <LocalData />
 
-        <div style={{ ...SECTION, color: "var(--ink-2)" }}>Cuenta</div>
-        <div style={{ ...CARD, flexDirection: "row", alignItems: "center" }}>
-          <span style={{ flex: 1, fontSize: 13, color: "var(--ink-2)", wordBreak: "break-all" }}>{session.user.email}</span>
-          <button onClick={() => supabase.auth.signOut()} style={{ ...GHOST_BTN, padding: "7px 12px" }}>Salir</button>
-        </div>
-        <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--ink-3)", textAlign: "center" }}>
-          Zona horaria: {Intl.DateTimeFormat().resolvedOptions().timeZone}
-        </div>
+        <Group header="Cuenta" footer={`Zona horaria: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`}>
+          <Row>
+            <span style={{ flex: 1, minWidth: 0, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis" }}>{session.user.email}</span>
+          </Row>
+          <Row divider onClick={() => supabase.auth.signOut()}>
+            <span style={{ ...DANGER_BTN, padding: 0 }}>Cerrar sesión</span>
+          </Row>
+        </Group>
       </div>
     </>
   );
