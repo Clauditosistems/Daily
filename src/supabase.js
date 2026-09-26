@@ -169,7 +169,7 @@ export async function updateRoutine(id, changes, today) {
     .update({ ...changes, generated_until: addDays(today, -1) }).eq("id", id).select().single();
   if (error) throw error;
   const { error: e2 } = await supabase.from("tasks")
-    .update({ text: data.text, block_type: data.block_type, prio: data.prio })
+    .update({ text: data.text, block_type: data.block_type, prio: data.prio, scheduled_time: data.scheduled_time })
     .eq("routine_id", id).eq("done", false).gte("assigned_date", today);
   if (e2) throw e2;
   // Días que dejaron de aplicar (o rutina pausada): se borran sus instancias futuras pendientes.
@@ -207,7 +207,7 @@ export async function ensureRoutineTasks(routines, dates, today) {
     if (date > until) return;
     for (; date <= until; date = addDays(date, 1)) {
       if (r.days_of_week.includes(parseYmd(date).getDay()))
-        rows.push({ routine_id: r.id, assigned_date: date, text: r.text, block_type: r.block_type, prio: r.prio });
+        rows.push({ routine_id: r.id, assigned_date: date, text: r.text, block_type: r.block_type, prio: r.prio, scheduled_time: r.scheduled_time });
     }
     advanced.push(r);
   });
@@ -239,6 +239,84 @@ export async function fetchSavedSummary(weekStart) {
   return data;
 }
 
+// ─── CONFIGURACIÓN ───────────────────────────────────────────
+export async function fetchSettings() {
+  const { data, error } = await supabase.from("settings").select("*").maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSettings(changes) {
+  const { data, error } = await supabase.from("settings").update(changes)
+    .eq("user_id", (await supabase.auth.getSession()).data.session.user.id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// ─── NOTAS E IDEAS ───────────────────────────────────────────
+export async function fetchNotes(kind, archived = false) {
+  const { data, error } = await supabase.from("notes").select("*")
+    .eq("kind", kind).eq("archived", archived)
+    .order("note_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchNotesForDate(date) {
+  const { data, error } = await supabase.from("notes").select("*")
+    .eq("note_date", date).eq("archived", false).order("remind_time", { nullsFirst: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function createNote(note) {
+  const { data, error } = await supabase.from("notes").insert(note).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateNote(id, changes) {
+  const { data, error } = await supabase.from("notes").update(changes).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteNote(id) {
+  const { error } = await supabase.from("notes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ─── CUMPLEAÑOS ──────────────────────────────────────────────
+export async function fetchBirthdays() {
+  const { data, error } = await supabase.from("birthdays").select("*").order("month").order("day");
+  if (error) throw error;
+  return data;
+}
+
+export async function saveBirthday(id, birthday) {
+  const q = id
+    ? supabase.from("birthdays").update(birthday).eq("id", id)
+    : supabase.from("birthdays").insert(birthday);
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteBirthday(id) {
+  const { error } = await supabase.from("birthdays").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Convierte una tarea suelta en la primera instancia de una rutina nueva.
+export async function makeRoutineFromTask(task, days) {
+  const routine = await createRoutine({
+    text: task.text, block_type: task.block_type, prio: task.prio, scheduled_time: task.scheduled_time,
+    days_of_week: [...days].sort((a, b) => a - b),
+  });
+  const updated = await updateTask(task.id, { routine_id: routine.id });
+  return { routine, task: updated };
+}
+
 // ─── MIGRACIÓN DESDE INDEXEDDB ───────────────────────────────
 // Solo tareas (type "task") con fecha. Los adjuntos se ignoran.
 const CTX_TO_BLOCK_TYPE = { work: "trabajo", study: "estudio" };
@@ -264,6 +342,33 @@ export async function migrateLocalTasks() {
   // Idempotente: si ya se migró, unique (user_id, legacy_id) lo saltea.
   const { error } = await supabase
     .from("tasks")
+    .upsert(rows, { onConflict: "user_id,legacy_id", ignoreDuplicates: true });
+  if (error) throw error;
+  return rows.length;
+}
+
+// Notas, ideas y planes viejos → notes. Los planes pasan como notas; los adjuntos se ignoran.
+export async function localNotesToMigrate() {
+  const items = await db.getItems();
+  return items.filter(i => ["note", "idea", "plan"].includes(i.type) && i.text?.trim());
+}
+
+export async function migrateLocalNotes() {
+  const items = await localNotesToMigrate();
+  if (!items.length) return 0;
+  const rows = items.map(i => {
+    const kind = i.type === "idea" ? "idea" : "note";
+    return {
+      legacy_id:  i.id,
+      kind,
+      text:       i.text.trim(),
+      note_date:  kind === "note" ? i.deadline || null : null,
+      archived:   !!i.done,
+      created_at: i.ts || new Date().toISOString(),
+    };
+  });
+  const { error } = await supabase
+    .from("notes")
     .upsert(rows, { onConflict: "user_id,legacy_id", ignoreDuplicates: true });
   if (error) throw error;
   return rows.length;

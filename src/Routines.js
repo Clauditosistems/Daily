@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchRoutines, createRoutine, updateRoutine, deleteRoutine } from "./supabase";
 import {
-  BLOCK_TYPE, DAYS, PRIO, todayStr,
+  BLOCK_TYPE, DAYS, PRIO, todayStr, hhmm,
   FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, PrioPicker, DayPicker,
 } from "./ui";
 
@@ -20,6 +20,7 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
   const [days, setDays]           = useState(routine?.days_of_week || []);
   const [prio, setPrio]           = useState(routine?.prio || "mid");
   const [active, setActive]       = useState(routine?.active ?? true);
+  const [time, setTime]           = useState(hhmm(routine?.scheduled_time));
   const [error, setError]         = useState("");
   const [busy, setBusy]           = useState(false);
 
@@ -30,7 +31,7 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
     if (!days.length) return setError("Elegí al menos un día.");
     setBusy(true); setError("");
     try {
-      await onSave({ text: text.trim(), block_type: blockType, days_of_week: [...days].sort((a, b) => a - b), prio, active });
+      await onSave({ text: text.trim(), block_type: blockType, days_of_week: [...days].sort((a, b) => a - b), prio, active, scheduled_time: time || null });
       onClose();
     } catch (err) { setError(err.message); setBusy(false); }
   }
@@ -51,6 +52,10 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
       <div>
         <div style={LABEL}>Bloque</div>
         <BlockTypePicker value={blockType} onChange={setBlockType} allowNone />
+      </div>
+      <div>
+        <div style={LABEL}>Hora (opcional)</div>
+        <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", maxWidth: 140 }} />
       </div>
       <div>
         <div style={LABEL}>Prioridad</div>
@@ -122,7 +127,7 @@ export default function RoutinesView() {
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#1a1814" }}>{r.text}</span>
               <span style={{ display: "block", fontFamily: "monospace", fontSize: 10, color: "#a09890", marginTop: 2 }}>
-                {daysLabel(r.days_of_week)}{t ? ` · ${t.icon} ${t.label}` : ""}{r.active ? "" : " · pausada"}
+                {daysLabel(r.days_of_week)}{r.scheduled_time ? ` · ${hhmm(r.scheduled_time)}` : ""}{t ? ` · ${t.icon} ${t.label}` : ""}{r.active ? "" : " · pausada"}
               </span>
             </span>
           </button>

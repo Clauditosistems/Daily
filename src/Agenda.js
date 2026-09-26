@@ -3,14 +3,17 @@ import {
   fetchBlocksForDay, fetchTasksForDate, fetchPendingCounts, createTask, updateTask, deleteTask,
   fetchRoutines, ensureRoutineTasks, rolloverMine, fetchDayOverride, markAtypical, unmarkAtypical,
   fetchCancelledBlocks, setBlockOverride, clearBlockOverride,
+  makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays,
 } from "./supabase";
 import {
-  BLOCK_TYPE, PRIO, PRIO_ORDER, hhmm, toMinutes, parseYmd, todayStr, addDays, weekDates, dayTitle,
-  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, SECTION, Sheet, BlockTypePicker, PrioPicker,
+  BLOCK_TYPE, PRIO, PRIO_ORDER, hhmm, toMinutes, parseYmd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
+  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, SECTION, Sheet, BlockTypePicker, PrioPicker, DayPicker,
 } from "./ui";
 
 const byPriority = (a, b) =>
-  (a.done - b.done) || (PRIO_ORDER[a.prio] - PRIO_ORDER[b.prio]) || a.created_at.localeCompare(b.created_at);
+  (a.done - b.done)
+  || ((a.scheduled_time || "99") < (b.scheduled_time || "99") ? -1 : (a.scheduled_time || "99") > (b.scheduled_time || "99") ? 1 : 0)
+  || (PRIO_ORDER[a.prio] - PRIO_ORDER[b.prio]) || a.created_at.localeCompare(b.created_at);
 
 // Una tarea va al bloque que tiene asignado; si no, al primer bloque del día de su mismo tipo.
 function placeTasks(blocks, tasks) {
@@ -66,6 +69,11 @@ function TaskRow({ task, onToggle, onTap, showType }) {
       <button onClick={() => onTap(task)}
         style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
         <span style={{ display: "block", fontSize: 14, lineHeight: 1.45, color: task.done ? "#a09890" : "#1a1814", textDecoration: task.done ? "line-through" : "none", wordBreak: "break-word" }}>
+          {task.scheduled_time && (
+            <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: task.done ? "#a09890" : "#1a1814", marginRight: 6 }}>
+              {hhmm(task.scheduled_time)}
+            </span>
+          )}
           {task.text}
         </span>
         {(task.routine_id || task.rollover_count > 0 || (showType && t)) && (
@@ -90,17 +98,23 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
   const [date, setDate]           = useState(task.assigned_date);
   const [blockType, setBlockType] = useState(task.block_type ?? null);
   const [prio, setPrio]           = useState(task.prio || "mid");
+  const [time, setTime]           = useState(hhmm(task.scheduled_time));
+  const [repeat, setRepeat]       = useState(false);
+  const [repeatDays, setRepeatDays] = useState(() => [parseYmd(task.assigned_date).getDay()]);
   const [error, setError]         = useState("");
   const [busy, setBusy]           = useState(false);
+
+  const toggleRepeatDay = d => setRepeatDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
 
   async function save() {
     if (!text.trim()) return setError("Escribí la tarea.");
     if (!date) return setError("Elegí una fecha.");
-    const changes = { text: text.trim(), assigned_date: date, block_type: blockType, prio };
+    if (repeat && !repeatDays.length) return setError("Elegí al menos un día para repetir.");
+    const changes = { text: text.trim(), assigned_date: date, block_type: blockType, prio, scheduled_time: time || null };
     // Si cambió el día o el tipo, deja de estar atada a un bloque puntual.
     if (date !== task.assigned_date || blockType !== (task.block_type ?? null)) changes.block_id = null;
     setBusy(true); setError("");
-    try { await onSave(changes); onClose(); }
+    try { await onSave(changes, repeat ? repeatDays : null); onClose(); }
     catch (err) { setError(err.message); setBusy(false); }
   }
 
@@ -123,10 +137,33 @@ function TaskSheet({ task, onSave, onDelete, onClose }) {
         <BlockTypePicker value={blockType} onChange={setBlockType} allowNone />
       </div>
       <div>
+        <div style={LABEL}>Hora (opcional)</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ ...FIELD, fontFamily: "monospace", maxWidth: 140 }} />
+          {time && <button onClick={() => setTime("")} style={{ ...GHOST_BTN, padding: "8px 12px" }}>Sin hora</button>}
+        </div>
+        {time && <div style={{ fontSize: 11.5, color: "#a09890", marginTop: 5 }}>Te llega un aviso a esa hora.</div>}
+      </div>
+      <div>
         <div style={LABEL}>Prioridad</div>
         <PrioPicker value={prio} onChange={setPrio} />
       </div>
-      {task.routine_id && <div style={{ fontSize: 12, color: "#a09890" }}>🔁 Esta tarea viene de una rutina. Los cambios aplican solo a este día.</div>}
+      {task.routine_id
+        ? <div style={{ fontSize: 12, color: "#a09890" }}>🔁 Esta tarea viene de una rutina. Los cambios aplican solo a este día; la rutina se edita en la pestaña Rutinas.</div>
+        : (
+          <div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+              <input type="checkbox" checked={repeat} onChange={e => setRepeat(e.target.checked)} style={{ width: 16, height: 16 }} />
+              🔁 Repetir (convertir en rutina)
+            </label>
+            {repeat && (
+              <div style={{ marginTop: 10 }}>
+                <DayPicker value={repeatDays} onToggle={toggleRepeatDay} />
+                <div style={{ fontSize: 11.5, color: "#a09890", marginTop: 6 }}>Va a aparecer sola esos días, desde hoy.</div>
+              </div>
+            )}
+          </div>
+        )}
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         {!isNew && <button onClick={remove} disabled={busy} style={{ ...GHOST_BTN, color: "#c0392b", borderColor: "#f0c8c0" }}>🗑</button>}
@@ -278,6 +315,8 @@ export default function AgendaView() {
   const [cancelled, setCancelled]     = useState([]);
   const [reloadKey, setReloadKey]     = useState(0);
   const [notice, setNotice]           = useState("");
+  const [dayNotes, setDayNotes]       = useState([]);
+  const [birthdays, setBirthdays]     = useState([]);
   const [counts, setCounts]     = useState({});
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
@@ -291,6 +330,7 @@ export default function AgendaView() {
     rolloverMine().catch(err => setError(err.message))
       .then(fetchRoutines).then(r => setRoutines(r || []))
       .catch(err => { setError(err.message); setRoutines([]); });
+    fetchBirthdays().then(setBirthdays).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -301,15 +341,16 @@ export default function AgendaView() {
     (async () => {
       try {
         await ensureRoutineTasks(routines, week, today);
-        const [b, t, c, o, x] = await Promise.all([
+        const [b, t, c, o, x, n] = await Promise.all([
           fetchBlocksForDay(selected),
           fetchTasksForDate(selected),
           fetchPendingCounts(week[0], week[6]),
           fetchDayOverride(selected),
           fetchCancelledBlocks(selected),
+          fetchNotesForDate(selected),
         ]);
         if (id !== requestId.current) return;  // el usuario ya cambió de día
-        setBlocks(b); setTasks(t); setCounts(c); setDayOverride(o); setCancelled(x); setError("");
+        setBlocks(b); setTasks(t); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setError("");
       } catch (err) {
         if (id === requestId.current) setError(err.message);
       } finally {
@@ -339,8 +380,13 @@ export default function AgendaView() {
     catch (err) { setError(err.message); }
   }
 
-  async function saveTask(changes) {
-    const saved = sheet.id ? await updateTask(sheet.id, changes) : await createTask({ ...changes, block_id: sheet.block_id ?? null });
+  async function saveTask(changes, repeatDays) {
+    let saved = sheet.id ? await updateTask(sheet.id, changes) : await createTask({ ...changes, block_id: sheet.block_id ?? null });
+    if (repeatDays) {
+      const { routine, task } = await makeRoutineFromTask(saved, repeatDays);
+      saved = task;
+      setRoutines(p => [...p, routine]);  // recarga y genera las próximas instancias
+    }
     applyTask(saved);
     refreshCounts();
   }
@@ -359,6 +405,11 @@ export default function AgendaView() {
     } catch (err) { setError(err.message); }
   }
 
+  async function archiveNote(note) {
+    try { await updateNote(note.id, { archived: true }); setDayNotes(p => p.filter(n => n.id !== note.id)); }
+    catch (err) { setError(err.message); }
+  }
+
   async function undoAtypical() {
     try { await unmarkAtypical(dayOverride.id); setNotice(""); reload(); }
     catch (err) { setError(err.message); }
@@ -374,6 +425,8 @@ export default function AgendaView() {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const typesToday = [...new Set(blocks.map(b => b.block_type))];
   const isToday = selected === today;
+  const year = parseYmd(selected).getFullYear();
+  const dayBirthdays = birthdays.filter(b => birthdayOn(b.month, b.day, year) === selected);
 
   return (
     <>
@@ -396,6 +449,27 @@ export default function AgendaView() {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px 24px", display: "flex", flexDirection: "column", gap: 10, opacity: loading ? 0.55 : 1, transition: "opacity 0.15s" }}>
         {error && <div style={ERROR_BOX}>{error}</div>}
+
+        {(dayBirthdays.length > 0 || dayNotes.length > 0) && (
+          <div style={{ background: "#fffaf0", border: "1.5px solid #f0d8a8", borderRadius: 15, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+            {dayBirthdays.map(b => (
+              <div key={b.id} style={{ fontSize: 14 }}>
+                🎂 <b>Cumple de {b.name}</b>
+                {b.year && <span style={{ color: "#a09890" }}> · {year - b.year} años</span>}
+              </div>
+            ))}
+            {dayNotes.map(n => (
+              <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 14 }}>
+                <span>📝</span>
+                <span style={{ flex: 1, wordBreak: "break-word" }}>
+                  {n.remind_time && <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, marginRight: 6 }}>{hhmm(n.remind_time)}</span>}
+                  {n.text}
+                </span>
+                <button onClick={() => archiveNote(n)} style={{ ...LINK_BTN, color: "#1a9460", fontWeight: 700 }}>✓ listo</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {notice && <div style={{ background: "#edf8f3", color: "#1a9460", borderRadius: 10, padding: "9px 12px", fontSize: 12.5 }}>{notice}</div>}
 
@@ -427,7 +501,7 @@ export default function AgendaView() {
 
         {!loading && !dayOverride && blocks.length === 0 && (
           <div style={{ textAlign: "center", color: "#a09890", fontSize: 13, padding: "18px 10px", lineHeight: 1.6 }}>
-            No hay bloques este día.<br /><span style={{ fontSize: 11.5 }}>Los configurás en la pestaña ⚙ Semana.</span>
+            No hay bloques este día.<br /><span style={{ fontSize: 11.5 }}>Los configurás tocando "Daily" arriba a la izquierda.</span>
           </div>
         )}
 

@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import {
-  supabase, fetchBlocks, createBlocks, updateBlock, deleteBlock,
-  blockErrorMessage, localTasksToMigrate, migrateLocalTasks,
+  fetchBlocks, createBlocks, updateBlock, deleteBlock, blockErrorMessage,
 } from "./supabase";
 import {
   BLOCK_TYPE, DAYS, hhmm, toMinutes, durationLabel,
   FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, DayPicker,
 } from "./ui";
-import PushSettings from "./PushSettings";
 
 // Un bloque que termina a medianoche se guarda como 24:00 (el input time no lo admite).
 const endForDb = t => (t === "00:00" ? "24:00" : t);
@@ -115,44 +113,8 @@ function BlockRow({ block, onTap }) {
   );
 }
 
-// ─── CUENTA + MIGRACIÓN ──────────────────────────────────────
-function AccountFooter({ session }) {
-  const [pending, setPending] = useState(null);
-  const [status, setStatus]   = useState("");
-  const [busy, setBusy]       = useState(false);
-
-  useEffect(() => { localTasksToMigrate().then(t => setPending(t.length)).catch(() => setPending(0)); }, []);
-
-  async function migrate() {
-    setBusy(true); setStatus("");
-    try {
-      const n = await migrateLocalTasks();
-      setStatus(`✓ ${n} tarea${n === 1 ? "" : "s"} subida${n === 1 ? "" : "s"}.`);
-    } catch (err) { setStatus(`Error: ${err.message}`); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <div style={{ marginTop: 8, borderTop: "1px solid #d8d2c6", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-      {pending > 0 && (
-        <div style={{ background: "#fff", border: "1.5px solid #d8d2c6", borderRadius: 14, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-            Hay <b>{pending}</b> tarea{pending === 1 ? "" : "s"} con fecha en este dispositivo. Subilas a la nube para verlas en el calendario (los adjuntos no se suben).
-          </div>
-          <button onClick={migrate} disabled={busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>{busy ? "Subiendo…" : "Subir tareas"}</button>
-          {status && <div style={{ fontSize: 12, color: status.startsWith("Error") ? "#c0392b" : "#1a9460" }}>{status}</div>}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, color: "#a09890" }}>
-        <span>{session.user.email}</span>
-        <button onClick={() => supabase.auth.signOut()} style={{ background: "none", border: "none", color: "#a09890", fontSize: 11.5, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>Salir</button>
-      </div>
-    </div>
-  );
-}
-
 // ─── VISTA PRINCIPAL ─────────────────────────────────────────
-export default function BlocksView({ session }) {
+export default function BlocksView() {
   const [blocks, setBlocks]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -185,7 +147,6 @@ export default function BlocksView({ session }) {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px 40px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <PushSettings />
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "0 2px" }}>
         <div style={{ fontSize: 13, color: "#6b6457" }}>Tu semana tipo. Se repite todas las semanas.</div>
         {weekMinutes > 0 && <div style={{ fontFamily: "monospace", fontSize: 10.5, color: "#a09890" }}>{durationLabel(weekMinutes)}/sem</div>}
@@ -213,7 +174,6 @@ export default function BlocksView({ session }) {
         );
       })}
 
-      <AccountFooter session={session} />
 
       {sheet && (
         <BlockSheet

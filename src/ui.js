@@ -49,6 +49,12 @@ export function weekDates(s) {
   const monday = addDays(s, -((d.getDay() + 6) % 7));
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
+// Fecha (YYYY-MM-DD) de un cumpleaños en un año dado; el 29/2 cae el 28/2 si el año no es bisiesto.
+export function birthdayOn(month, day, year) {
+  const last = new Date(year, month, 0).getDate();
+  return ymd(new Date(year, month - 1, Math.min(day, last)));
+}
+
 export function dayTitle(s) {
   const today = todayStr();
   if (s === today) return "Hoy";

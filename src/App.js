@@ -5,13 +5,14 @@ import Login from "./Login";
 import AgendaView from "./Agenda";
 import RoutinesView from "./Routines";
 import SummaryView from "./Summary";
-import BlocksView from "./Blocks";
+import NotesView from "./Notes";
+import SettingsView from "./Settings";
 
 const TABS = [
   ["agenda",   "📅 Agenda"],
   ["rutinas",  "🔁 Rutinas"],
+  ["notas",    "📝 Notas"],
   ["resumen",  "📊 Resumen"],
-  ["semana",   "⚙ Semana"],
 ];
 
 // "/?view=resumen" (lo usa el push del domingo) abre directo esa pestaña.
@@ -55,10 +56,14 @@ export default function App() {
     <div style={SHELL}>
       <div style={{ background: "#f5f2ec", padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 30, borderBottom: "1px solid #d8d2c6" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: session ? 11 : 14 }}>
-          <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.7px" }}>Daily</span>
+          <button onClick={() => session && setView(view === "config" ? "agenda" : "config")} aria-label="Configuración"
+            style={{ background: "none", border: "none", padding: 0, cursor: session ? "pointer" : "default", fontFamily: "inherit", color: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-0.7px" }}>Daily</span>
+            {session && <span style={{ fontSize: 13, color: view === "config" ? "#1a1814" : "#a09890" }}>⚙</span>}
+          </button>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {session && pushOff && view !== "semana" && (
-              <button onClick={() => setView("semana")}
+            {session && pushOff && view !== "config" && (
+              <button onClick={() => setView("config")}
                 style={{ background: "#eef3fd", border: "1.5px solid #2563c4", color: "#2563c4", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                 🔔 Avisos
               </button>
@@ -84,7 +89,8 @@ export default function App() {
       {session && view === "agenda"  && <AgendaView />}
       {session && view === "rutinas" && <RoutinesView />}
       {session && view === "resumen" && <SummaryView />}
-      {session && view === "semana"  && <BlocksView session={session} />}
+      {session && view === "notas"   && <NotesView />}
+      {session && view === "config"  && <SettingsView session={session} onClose={() => setView("agenda")} />}
     </div>
   );
 }
