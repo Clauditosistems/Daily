@@ -67,16 +67,57 @@ export async function fetchBlocksForDay(date) {
   return data;
 }
 
-// ─── TAREAS ──────────────────────────────────────────────────
-export async function fetchTasksForDate(date) {
-  const { data, error } = await supabase.from("tasks").select("*").eq("assigned_date", date).order("created_at");
+// ─── DÍAS ATÍPICOS Y CAMBIOS DE UN BLOQUE POR UN DÍA ─────────
+export async function fetchDayOverride(date) {
+  const { data, error } = await supabase.from("day_overrides").select("*").eq("override_date", date).maybeSingle();
   if (error) throw error;
   return data;
 }
 
-export async function fetchOverdueTasks(beforeDate) {
-  const { data, error } = await supabase.from("tasks").select("*")
-    .eq("done", false).lt("assigned_date", beforeDate).order("assigned_date");
+// Marca el día y reprograma sus tareas (ver reschedule_day). Devuelve cuántas se movieron.
+export async function markAtypical(date, note) {
+  const { error } = await supabase.from("day_overrides").insert({ override_date: date, note: note || null });
+  if (error) throw error;
+  const { data, error: e2 } = await supabase.rpc("reschedule_day", { p_date: date });
+  if (e2) throw e2;
+  return data;
+}
+
+export async function unmarkAtypical(id) {
+  const { error } = await supabase.from("day_overrides").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function fetchCancelledBlocks(date) {
+  const { data, error } = await supabase.from("block_overrides")
+    .select("id, block_id, weekly_blocks(block_type, label, start_time, end_time)")
+    .eq("override_date", date).eq("cancelled", true);
+  if (error) throw error;
+  return data;
+}
+
+// changes: { start_time, end_time } para mover el horario, o { cancelled: true }.
+export async function setBlockOverride(blockId, date, changes) {
+  const { error } = await supabase.from("block_overrides").upsert(
+    { block_id: blockId, override_date: date, start_time: null, end_time: null, cancelled: false, ...changes },
+    { onConflict: "block_id,override_date" });
+  if (error) throw error;
+}
+
+export async function clearBlockOverride(blockId, date) {
+  const { error } = await supabase.from("block_overrides").delete().eq("block_id", blockId).eq("override_date", date);
+  if (error) throw error;
+}
+
+// Pasa las tareas pendientes de días anteriores (el cron hace lo mismo cada hora).
+export async function rolloverMine() {
+  const { error } = await supabase.rpc("rollover_mine");
+  if (error) throw error;
+}
+
+// ─── TAREAS ──────────────────────────────────────────────────
+export async function fetchTasksForDate(date) {
+  const { data, error } = await supabase.from("tasks").select("*").eq("assigned_date", date).order("created_at");
   if (error) throw error;
   return data;
 }
