@@ -654,7 +654,7 @@ export default function AgendaView({ forceMode }) {
             ))}
             {dayNotes.map((n, i) => (
               <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i || dayBirthdays.length ? "0.5px solid var(--border)" : "none" }}>
-                <span style={{ fontSize: 20 }}>📝</span>
+                <span style={{ fontSize: 20 }}>{n.kind === "plan" ? "📅" : "📝"}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 16, wordBreak: "break-word" }}>
                   {n.text}
                   {n.remind_time && <span className="num" style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>{hhmm(n.remind_time)}</span>}

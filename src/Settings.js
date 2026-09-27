@@ -83,8 +83,9 @@ function NotificationPrefs() {
           <PrefRow key={key} divider={i > 0} label={label} hint={hint} checked={prefs[key]} onChange={v => change(key, v)} />
         ))}
       </Group>
-      <Group header="Cumpleaños y notas" footer="Los cumpleaños y las notas con fecha pero sin hora avisan a la hora de la mañana.">
-        <PrefRow label="Cumpleaños" checked={prefs.notify_birthdays} onChange={v => change("notify_birthdays", v)} />
+      <Group header="Planes, cumpleaños y notas" footer="Los avisos del día antes y las notas con fecha pero sin hora llegan a la hora de la mañana.">
+        <PrefRow label="Planes" hint="Te aviso el día antes." checked={prefs.notify_plans ?? true} onChange={v => change("notify_plans", v)} />
+        <PrefRow divider label="Cumpleaños" checked={prefs.notify_birthdays} onChange={v => change("notify_birthdays", v)} />
         <PrefRow divider label="También el día antes" checked={prefs.birthday_day_before} disabled={!prefs.notify_birthdays}
           onChange={v => change("birthday_day_before", v)} />
         <Row divider>

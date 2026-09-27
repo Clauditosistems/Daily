@@ -4,7 +4,7 @@ import {
   fetchBirthdays, saveBirthday, deleteBirthday,
 } from "./supabase";
 import {
-  hhmm, parseYmd, todayStr, birthdayOn,
+  hhmm, parseYmd, todayStr, addDays, birthdayOn,
   FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented
 } from "./ui";
 
@@ -17,11 +17,14 @@ function relativeDays(n) {
   return `en ${n} días`;
 }
 
-const LINK_BTN = { background: "none", border: "none", padding: "2px 4px", fontFamily: "inherit", fontSize: 13, color: "var(--ink-3)", cursor: "pointer" };
+// Días hasta una fecha (0 = hoy).
+const daysUntil = (d, today) => Math.round((parseYmd(d) - parseYmd(today)) / 86400000);
 
 // ─── NOTAS E IDEAS ───────────────────────────────────────────
 function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
   const isIdea = note.kind === "idea";
+  const isPlan = note.kind === "plan";
+  const isNew = !note.id;
   const [text, setText]   = useState(note.text || "");
   const [date, setDate]   = useState(note.note_date || "");
   const [time, setTime]   = useState(hhmm(note.remind_time));
@@ -35,18 +38,38 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
   }
 
   function save() {
-    if (!text.trim()) return setError("Escribí algo.");
+    if (!text.trim()) return setError(isPlan ? "Contá cuál es el plan." : "Escribí algo.");
+    if (isPlan && !date) return setError("Elegí el día del plan.");
     const changes = isIdea
       ? { text: text.trim() }
       : { text: text.trim(), note_date: date || null, remind_time: date && time ? time : null };
     run(() => onSave(changes));
   }
 
+  const title = isPlan ? (isNew ? "Nuevo plan" : "Plan") : isIdea ? "Idea" : "Nota";
   return (
-    <Sheet title={isIdea ? "Idea" : "Nota"} onClose={onClose}>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={4} placeholder={isIdea ? "Tu idea…" : "Tu nota…"}
+    <Sheet title={title} onClose={onClose}>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={isPlan ? 2 : 4} autoFocus={isNew}
+        placeholder={isPlan ? "Ej: Cena con Juan en lo de Sofi" : isIdea ? "Tu idea…" : "Tu nota…"}
         style={{ ...FIELD, resize: "vertical", lineHeight: 1.5 }} />
-      {!isIdea && (
+      {isPlan && (
+        <div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 2 }}>
+              <div style={LABEL}>Cuándo</div>
+              <input type="date" value={date} min={todayStr()} onChange={e => setDate(e.target.value)} className="num" style={FIELD} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={LABEL}>Hora (opcional)</div>
+              <input type="time" value={time} onChange={e => setTime(e.target.value)} className="num" style={FIELD} />
+            </div>
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 8, lineHeight: 1.45 }}>
+            Te aviso el día antes, a la hora de la mañana{time ? `, y el mismo día a las ${time}` : ""}.
+          </div>
+        </div>
+      )}
+      {!isIdea && !isPlan && (
         <div>
           <div style={LABEL}>Recordarme (opcional)</div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -60,16 +83,44 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
       )}
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={DANGER_BTN}>Eliminar</button>
-        <button onClick={() => run(() => onSave({ archived: !note.archived }))} disabled={busy} style={GHOST_BTN}>
-          {note.archived ? "Desarchivar" : "Archivar"}
-        </button>
+        {isNew
+          ? <button onClick={onClose} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>Cancelar</button>
+          : <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+        {!isNew && !isPlan && (
+          <button onClick={() => run(() => onSave({ archived: !note.archived }))} disabled={busy} style={GHOST_BTN}>
+            {note.archived ? "Desarchivar" : "Archivar"}
+          </button>
+        )}
         {isIdea && !note.archived && (
           <button onClick={() => run(() => onToTask(text.trim()))} disabled={busy} style={GHOST_BTN}>→ Pasar a tarea</button>
         )}
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 1, opacity: busy ? 0.6 : 1 }}>Guardar</button>
       </div>
     </Sheet>
+  );
+}
+
+function planWhen(n) {
+  if (n === 0) return "hoy";
+  if (n === 1) return "mañana";
+  return `en ${n} días`;
+}
+
+// Fecha como hoja de calendario: día de la semana arriba, número grande.
+function PlanDate({ date, today }) {
+  const d = parseYmd(date);
+  const isToday = date === today;
+  return (
+    <span aria-hidden="true" style={{ width: 44, flexShrink: 0, textAlign: "center", borderRadius: 10, padding: "4px 0 5px",
+      background: isToday ? "var(--accent)" : "var(--surface-2)", color: isToday ? "#fff" : "var(--ink)" }}>
+      <span style={{ display: "block", fontSize: 11, fontWeight: 600, textTransform: "capitalize", color: isToday ? "#fff" : "var(--accent)" }}>
+        {d.toLocaleDateString("es-AR", { weekday: "short" }).replace(".", "")}
+      </span>
+      <span className="num" style={{ display: "block", fontSize: 19, fontWeight: 700, lineHeight: 1.1 }}>{d.getDate()}</span>
+      <span style={{ display: "block", fontSize: 10, color: isToday ? "#fff" : "var(--ink-2)" }}>
+        {d.toLocaleDateString("es-AR", { month: "short" }).replace(".", "")}
+      </span>
+    </span>
   );
 }
 
@@ -83,20 +134,35 @@ function NotesList({ kind }) {
   const [notice, setNotice]     = useState("");
   const today = todayStr();
 
+  const isPlan = kind === "plan";
+  // Planes: la vista principal muestra los próximos (de hoy en adelante); "pasados" junta los viejos y archivados.
+  const inView = n => !isPlan ? n.archived === archived : archived ? (n.archived || n.note_date < today) : (!n.archived && n.note_date >= today);
+  const sortPlans = list => [...list].sort((a, b) => archived ? b.note_date.localeCompare(a.note_date) : a.note_date.localeCompare(b.note_date)
+    || (a.remind_time || "99").localeCompare(b.remind_time || "99"));
+
   useEffect(() => {
     setLoading(true);
-    fetchNotes(kind, archived).then(setNotes).catch(err => setError(err.message)).finally(() => setLoading(false));
-  }, [kind, archived]);
+    const load = isPlan
+      ? Promise.all([fetchNotes("plan", false), archived ? fetchNotes("plan", true) : Promise.resolve([])])
+          .then(([a, b]) => sortPlans([...a, ...b].filter(inView)))
+      : fetchNotes(kind, archived);
+    load.then(setNotes).catch(err => setError(err.message)).finally(() => setLoading(false));
+  }, [kind, archived]);  // eslint: inView/sortPlans dependen solo de kind, archived y today
 
   async function add() {
     if (!text.trim()) return;
+    if (isPlan) { setSheet({ kind: "plan", text: text.trim(), note_date: addDays(today, 1) }); setText(""); return; }
     try { const n = await createNote({ kind, text: text.trim() }); setNotes(p => [n, ...p]); setText(""); }
     catch (err) { setError(err.message); }
   }
 
   async function save(changes) {
-    const updated = await updateNote(sheet.id, changes);
-    setNotes(p => updated.archived !== archived ? p.filter(n => n.id !== updated.id) : p.map(n => n.id === updated.id ? updated : n));
+    const saved = sheet.id ? await updateNote(sheet.id, changes) : await createNote({ kind, ...changes });
+    setNotes(p => {
+      const rest = p.filter(n => n.id !== saved.id);
+      const next = inView(saved) ? [...rest, saved] : rest;
+      return isPlan ? sortPlans(next) : sheet.id ? p.map(n => n.id === saved.id ? saved : n).filter(inView) : [saved, ...p];
+    });
   }
 
   async function remove(id) {
@@ -120,7 +186,9 @@ function NotesList({ kind }) {
         {loading && <div style={{ color: "var(--ink-2)", fontSize: 15, padding: 20, textAlign: "center" }}>Cargando…</div>}
         {!loading && notes.length === 0 && (
           <div style={{ textAlign: "center", color: "var(--ink-2)", fontSize: 16, padding: "40px 16px", lineHeight: 1.5 }}>
-            {archived ? "No hay nada archivado." : isIdea ? "Anotá acá lo que se te ocurra." : "Notas sueltas, o con fecha para que te avise."}
+            {archived ? (isPlan ? "No hay planes pasados." : "No hay nada archivado.")
+              : isPlan ? "Anotá tus planes: te aviso el día antes."
+              : isIdea ? "Anotá acá lo que se te ocurra." : "Notas sueltas, o con fecha para que te avise."}
           </div>
         )}
         {notes.length > 0 && (
@@ -128,10 +196,16 @@ function NotesList({ kind }) {
             {notes.map((n, i) => {
               const past = n.note_date && n.note_date < today;
               return (
-                <Row key={n.id} divider={i > 0} onClick={() => setSheet(n)} style={{ opacity: archived ? 0.6 : 1, alignItems: "flex-start" }}>
+                <Row key={n.id} divider={i > 0} onClick={() => setSheet(n)} style={{ opacity: archived ? 0.6 : 1, alignItems: isPlan ? "center" : "flex-start" }}>
+                  {isPlan && <PlanDate date={n.note_date} today={today} />}
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ display: "block", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{n.text}</span>
-                    {n.note_date && (
+                    {isPlan && (
+                      <span className="num" style={{ display: "block", fontSize: 13, marginTop: 3, color: "var(--ink-2)" }}>
+                        {[n.remind_time && hhmm(n.remind_time), !archived && planWhen(daysUntil(n.note_date, today))].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {!isPlan && n.note_date && (
                       <span className="num" style={{ display: "block", fontSize: 13, marginTop: 3, color: n.note_date === today ? "var(--accent)" : "var(--ink-2)", fontWeight: n.note_date === today ? 600 : 400 }}>
                         {n.note_date === today ? "Hoy" : shortDate(n.note_date)}{n.remind_time ? `, ${hhmm(n.remind_time)}` : ""}{past ? " (ya pasó)" : ""}
                       </span>
@@ -144,7 +218,7 @@ function NotesList({ kind }) {
         )}
         {!loading && (
           <button onClick={() => setArchived(a => !a)} style={{ ...TEXT_BTN, fontSize: 15, alignSelf: "center" }}>
-            {archived ? "Volver" : "Ver archivadas"}
+            {archived ? "Volver" : isPlan ? "Ver pasados" : "Ver archivadas"}
           </button>
         )}
       </div>
@@ -152,7 +226,7 @@ function NotesList({ kind }) {
       {!archived && (
         <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "center" }}>
           <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
-            placeholder={isIdea ? "Nueva idea" : "Nueva nota"} aria-label={isIdea ? "Nueva idea" : "Nueva nota"}
+            placeholder={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"} aria-label={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"}
             style={{ ...FIELD, borderRadius: 20, padding: "10px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
           <button onClick={add} aria-label="Agregar" disabled={!text.trim()}
             style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
@@ -162,7 +236,7 @@ function NotesList({ kind }) {
         </div>
       )}
 
-      {sheet && <NoteSheet key={sheet.id} note={sheet} onSave={save} onDelete={remove} onToTask={toTask} onClose={() => setSheet(null)} />}
+      {sheet && <NoteSheet key={sheet.id || "new"} note={sheet} onSave={save} onDelete={remove} onToTask={toTask} onClose={() => setSheet(null)} />}
     </>
   );
 }
@@ -283,7 +357,7 @@ function BirthdaysList() {
 }
 
 // ─── VISTA ───────────────────────────────────────────────────
-const SECTIONS = [["note", "Notas"], ["idea", "Ideas"], ["birthday", "Cumples"]];
+const SECTIONS = [["note", "Notas"], ["idea", "Ideas"], ["plan", "Planes"], ["birthday", "Cumples"]];
 
 export default function NotesView() {
   const [section, setSection] = useState("note");
