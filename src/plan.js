@@ -44,6 +44,25 @@ export function currentBlock(blocks, nowMin) {
 export const nextBlock = (blocks, nowMin) =>
   [...blocks].sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time)).find(b => toMinutes(b.start_time) > nowMin) || null;
 
+// ─── CIERRE DEL DÍA ──────────────────────────────────────────
+// Empieza cuando arranca el ocio de hoy; si hoy no hay ocio, a la hora de Ajustes (19:00 por defecto).
+export function closingTime(blocks, fallback = "19:00") {
+  const ocio = blocks.filter(b => b.block_type === "ocio" && !b.floating).sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time))[0];
+  return ocio ? toMinutes(ocio.start_time) : toMinutes(fallback || "19:00");
+}
+
+// Lo que quedó sin resolver hoy (ni hecho ni marcado "no la hice").
+export const closingPending = tasks => tasks.filter(t => !t.done && !t.outcome);
+
+// "Hacerla ahora": tareas que elegiste hacer durante el ocio (se recuerdan en este dispositivo, solo por hoy).
+const nowKey = date => `daily-ahora-${date}`;
+export function doingNow(date) {
+  try { return JSON.parse(localStorage.getItem(nowKey(date)) || "[]"); } catch { return []; }
+}
+export function setDoingNow(date, ids) {
+  try { localStorage.setItem(nowKey(date), JSON.stringify(ids)); } catch {}
+}
+
 export function durationText(min) {
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60), m = min % 60;

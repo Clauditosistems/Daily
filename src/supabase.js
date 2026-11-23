@@ -128,7 +128,7 @@ export async function fetchTasksForDate(date) {
 // Tareas pendientes por día para la tira semanal.
 export async function fetchPendingCounts(from, to) {
   const { data, error } = await supabase.from("tasks").select("assigned_date")
-    .eq("done", false).gte("assigned_date", from).lte("assigned_date", to);
+    .eq("done", false).is("outcome", null).gte("assigned_date", from).lte("assigned_date", to);
   if (error) throw error;
   const counts = {};
   data.forEach(t => { counts[t.assigned_date] = (counts[t.assigned_date] || 0) + 1; });

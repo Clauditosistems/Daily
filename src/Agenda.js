@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import MonthView from "./MonthView";
 import Timeline from "./Timeline";
 import NowView from "./Now";
-import { placeTasks, visibleTasks, blockDone, blockStarted, currentBlock, nowMinutes } from "./plan";
+import { TaskRow, CheckCircle } from "./TaskRow";
+import { placeTasks, visibleTasks, blockDone, blockStarted, currentBlock, nowMinutes, closingTime, closingPending, doingNow, setDoingNow } from "./plan";
 import {
   fetchBlocksForDay, fetchTasksForDate, fetchPendingCounts, createTask, updateTask, deleteTask,
   fetchTask, fetchSubtasks, updateSubtask, saveSubtasks,
   fetchRoutines, ensureRoutineTasks, rolloverMine, fetchDayOverride, markAtypical, unmarkAtypical,
   fetchCancelledBlocks, setBlockOverride, clearBlockOverride,
-  makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin,
+  makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin, fetchSettings,
 } from "./supabase";
 import {
   BLOCK_TYPE, TASK_TYPES, PRIO, haptic, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
@@ -40,80 +41,6 @@ function WeekStrip({ selected, today, counts, onSelect }) {
           </button>
         );
       })}
-    </div>
-  );
-}
-
-// ─── TAREA ───────────────────────────────────────────────────
-function CheckCircle({ done, onClick, size = 24, label }) {
-  return (
-    <button onClick={onClick} aria-label={label || (done ? "Marcar pendiente" : "Marcar hecha")}
-      style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0,
-        display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", transition: "background 0.2s",
-        border: done ? "none" : "1.6px solid var(--ink-3)", background: done ? "var(--good-fill)" : "transparent" }}>
-      {done && <span className="check-pop" style={{ display: "flex" }}><Icon name="check" size={Math.round(size * 0.58)} stroke={3} /></span>}
-    </button>
-  );
-}
-
-// Progreso de subtareas: "2/3" y una barra chica. Neutro: nunca rojo.
-function SubProgress({ done, total, open, onClick }) {
-  return (
-    <button onClick={onClick} aria-expanded={open} aria-label={`Subtareas: ${done} de ${total} hechas. ${open ? "Ocultar" : "Ver"}`}
-      style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: "6px 0 0", cursor: "pointer", fontFamily: "inherit", color: "var(--ink-2)" }}>
-      <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{done}/{total}</span>
-      <span style={{ width: 44, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
-        <span style={{ display: "block", width: `${Math.round((done / total) * 100)}%`, height: "100%", background: "var(--good-fill)", borderRadius: 2, transition: "width 0.4s var(--ease-spring)" }} />
-      </span>
-      <Icon name="down" size={15} stroke={2.2} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
-    </button>
-  );
-}
-
-function TaskRow({ task, subtasks = [], onToggle, onToggleSub, onTap, showType, divider }) {
-  const [open, setOpen] = useState(false);
-  const t = BLOCK_TYPE[task.block_type];
-  const meta = [
-    task.scheduled_time && hhmm(task.scheduled_time),
-    showType && t && `${t.icon} ${t.label}`,
-    task.routine_id && "Se repite",
-  ].filter(Boolean);
-  const subsDone = subtasks.filter(s => s.done).length;
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 0", borderTop: divider ? "0.5px solid var(--border)" : "none" }}>
-      <CheckCircle done={task.done} onClick={() => onToggle(task)} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <button onClick={() => onTap(task)}
-          style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
-          <span style={{ display: "block", fontSize: 16, lineHeight: 1.35, whiteSpace: "pre-wrap", wordBreak: "break-word", transition: "color 0.2s",
-            color: task.done ? "var(--ink-3)" : "var(--ink)", textDecoration: task.done ? "line-through" : "none" }}>
-            {task.prio === "high" && !task.done && <span style={{ color: "var(--prio-high)", fontWeight: 700, marginRight: 5 }}>!!</span>}
-            {task.text}
-          </span>
-          {task.detail && (
-            <span style={{ display: "block", fontSize: 14, lineHeight: 1.4, color: task.done ? "var(--ink-3)" : "var(--ink-2)", marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {task.detail}
-            </span>
-          )}
-          {meta.length > 0 && (
-            <span className="num" style={{ display: "flex", gap: 10, fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>
-              {meta.map((m, i) => <span key={i}>{m}</span>)}
-            </span>
-          )}
-        </button>
-        {subtasks.length > 0 && <SubProgress done={subsDone} total={subtasks.length} open={open} onClick={() => setOpen(o => !o)} />}
-        {open && (
-          <div className="view-in" style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 6 }}>
-            {subtasks.map(s => (
-              <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "5px 0" }}>
-                <CheckCircle size={20} done={s.done} onClick={() => onToggleSub(s)} label={s.done ? `Desmarcar ${s.text}` : `Marcar ${s.text}`} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 1.35, wordBreak: "break-word",
-                  color: s.done ? "var(--ink-3)" : "var(--ink)", textDecoration: s.done ? "line-through" : "none" }}>{s.text}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -525,7 +452,8 @@ const monthTitle = s => {
 const firstOfMonth = (s, n = 0) => { const d = parseYmd(s); return ymd(new Date(d.getFullYear(), d.getMonth() + n, 1)); };
 
 // Antes de la primera: "7 cosas para hoy". Después: lo hecho, en positivo. Nunca "0 de 7".
-function DayProgress({ tasks, subs = {} }) {
+function DayProgress({ tasks: all, subs = {} }) {
+  const tasks = all.filter(t => !t.outcome);  // lo marcado "no la hice" no cuenta: ni a favor ni en contra
   if (!tasks.length) return null;
   const done = tasks.filter(t => t.done).length;
   // El avance parcial (subtareas hechas de tareas abiertas) también suma a la barra.
@@ -579,6 +507,8 @@ export default function AgendaView({ forceMode }) {
   const [sheet, setSheet]       = useState(null);  // tarea existente o borrador
   const [blockSheet, setBlockSheet]       = useState(null);
   const [atypicalSheet, setAtypicalSheet] = useState(false);
+  const [fallbackClose, setFallbackClose] = useState("19:00");  // cierre si hoy no hay ocio (Ajustes)
+  const [nowIds, setNowIds] = useState(() => doingNow(today));   // "Hacerla ahora" de hoy
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -587,6 +517,7 @@ export default function AgendaView({ forceMode }) {
       .then(fetchRoutines).then(r => setRoutines(r || []))
       .catch(err => { setError(err.message); setRoutines([]); });
     fetchBirthdays().then(setBirthdays).catch(() => {});
+    fetchSettings().then(s => s?.dayclose_fallback_time && setFallbackClose(hhmm(s.dayclose_fallback_time))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -609,7 +540,9 @@ export default function AgendaView({ forceMode }) {
         const s = await fetchSubtasks(t.map(x => x.id));
         if (id !== requestId.current) return;  // el usuario ya cambió de día
         setBlocks(b); setTasks(t); setSubs(s); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setCheckins(k); setError("");
-        if (selected === today) setModeState(m => m ?? (!o && currentBlock(b.filter(z => !z.floating), nowMinutes()) ? "ahora" : "dia"));
+        // Abre en "Ahora" si hay un bloque en curso o si ya es hora del cierre y quedó algo por resolver.
+        if (selected === today) setModeState(m => m ?? (!o && (currentBlock(b.filter(z => !z.floating), nowMinutes())
+          || (nowMinutes() >= closingTime(b, fallbackClose) && closingPending(visibleTasks(t, today)).length)) ? "ahora" : "dia"));
       } catch (err) {
         if (id === requestId.current) setError(err.message);
       } finally {
@@ -705,6 +638,28 @@ export default function AgendaView({ forceMode }) {
     refreshCounts();
   }
 
+  // Cierre del día. Nada de esto suena a falla: "no la hice" queda neutro, "mañana" suma al contador en silencio.
+  async function closeAction(task, action) {
+    try {
+      if (action === "done") {
+        haptic();
+        applyTask(await updateTask(task.id, { done: true }));
+        if (subs[task.id]?.length) await refreshTask(task.id);
+      } else if (action === "not_done") {
+        applyTask(await updateTask(task.id, { outcome: "not_done" }));
+      } else if (action === "tomorrow") {
+        applyTask(await updateTask(task.id, { assigned_date: addDays(today, 1), block_id: null, rollover_count: (task.rollover_count || 0) + 1 }));
+      } else if (action === "now") {
+        const ids = [...new Set([...nowIds, task.id])];
+        setDoingNow(today, ids); setNowIds(ids);
+      } else if (action === "delete") {
+        await removeTask(task.id);
+        return;
+      }
+      refreshCounts();
+    } catch (err) { setError(err.message); }
+  }
+
   async function removeTask(id) {
     await deleteTask(id);
     setTasks(p => p.filter(t => t.id !== id));
@@ -785,8 +740,9 @@ export default function AgendaView({ forceMode }) {
       </div>
 
       {mode === "ahora" && (
-        <NowView blocks={blocks} tasks={shownTasks} checkins={checkins} dayOverride={dayOverride} today={today} loading={loading}
-          onToggle={toggle} onCheckin={checkin} />
+        <NowView blocks={blocks} tasks={shownTasks} subs={subs} checkins={checkins} dayOverride={dayOverride} today={today} loading={loading}
+          closeAt={closingTime(blocks, fallbackClose)} nowIds={nowIds}
+          onToggle={toggle} onToggleSub={toggleSub} onTap={setSheet} onCheckin={checkin} onClose={closeAction} />
       )}
 
       {mode === null && <div style={{ flex: 1, textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: 30 }}>Cargando…</div>}

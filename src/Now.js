@@ -1,27 +1,30 @@
 import { useState, useEffect } from "react";
 import { fetchBlocksForDay } from "./supabase";
-import { BLOCK_TYPE, hhmm, toMinutes, addDays, PRIMARY_BTN, TEXT_BTN, Icon } from "./ui";
+import { BLOCK_TYPE, hhmm, toMinutes, addDays, PRIMARY_BTN, Icon } from "./ui";
 import { placeTasks, blockDone, currentBlock, nextBlock, nowMinutes, durationText } from "./plan";
+import { TaskRow } from "./TaskRow";
+import DayClose from "./DayClose";
 
-// Una sola pregunta: ¿qué hago ahora? El bloque en curso y UNA tarea. Sin listas ni totales.
-// Es la pantalla protagonista: la única con tipografía grande y más aire.
+// "Ahora": solo el bloque en curso y sus tareas, para marcarlas rápido.
+// Los bloques que ya pasaron no aparecen acá (el día completo está en "Día"); lo que quedó
+// sin marcar vuelve en el cierre del día, que aparece cuando empieza el ocio.
 
 const blockName = b => { const t = BLOCK_TYPE[b.block_type] || BLOCK_TYPE.otro; return `${t.icon} ${b.label || t.label}`; };
 
 function Hero({ children }) {
   return (
     <div className="view-in" style={{ background: "var(--surface)", borderRadius: 20, boxShadow: "var(--shadow-card)",
-      padding: "22px 22px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+      padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
       {children}
     </div>
   );
 }
 
 const Big = ({ children }) => (
-  <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, color: "var(--ink)", wordBreak: "break-word" }}>{children}</div>
+  <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, color: "var(--ink)", wordBreak: "break-word" }}>{children}</div>
 );
 const Soft = ({ children }) => <div style={{ fontSize: 16, color: "var(--ink-2)", lineHeight: 1.5 }}>{children}</div>;
-const BIG_BTN = { ...PRIMARY_BTN, padding: "17px 18px", fontSize: 17, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 };
+const BIG_BTN = { ...PRIMARY_BTN, padding: "15px 18px", fontSize: 17, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 };
 
 function BlockHeader({ block, nowMin }) {
   const start = toMinutes(block.start_time), end = toMinutes(block.end_time);
@@ -29,7 +32,7 @@ function BlockHeader({ block, nowMin }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{blockName(block)}</span>
+        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--ink)" }}>{blockName(block)}</span>
         <span className="num" style={{ fontSize: 13, color: "var(--ink-2)", whiteSpace: "nowrap" }}>quedan {durationText(Math.max(0, end - nowMin))}</span>
       </div>
       <div className="num" style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 2 }}>
@@ -42,10 +45,19 @@ function BlockHeader({ block, nowMin }) {
   );
 }
 
-export default function NowView({ blocks, tasks, checkins, dayOverride, today, loading, onToggle, onCheckin }) {
+function TaskList({ tasks, subs, onToggle, onToggleSub, onTap }) {
+  return (
+    <div>
+      {tasks.map((t, i) => (
+        <TaskRow key={t.id} task={t} subtasks={subs[t.id]} onToggle={onToggle} onToggleSub={onToggleSub} onTap={onTap} divider={i > 0} />
+      ))}
+    </div>
+  );
+}
+
+export default function NowView({ blocks, tasks, subs = {}, checkins, dayOverride, today, loading, closeAt, nowIds = [],
+  onToggle, onToggleSub, onTap, onCheckin, onClose }) {
   const [nowMin, setNowMin]     = useState(nowMinutes);
-  const [skipped, setSkipped]   = useState([]);
-  const [cheer, setCheer]       = useState(false);
   const [tomorrow, setTomorrow] = useState(null);
 
   useEffect(() => {
@@ -63,6 +75,9 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
   const tomorrowLine = tomorrow
     ? `Mañana arrancás con ${blockName(tomorrow)} a las ${hhmm(tomorrow.start_time)}.`
     : "Mañana no tenés bloques.";
+  const closing = !dayOverride && nowMin >= closeAt;
+  const pending = tasks.filter(t => !t.done && !t.outcome && !nowIds.includes(t.id));
+  const chosenNow = tasks.filter(t => nowIds.includes(t.id));
 
   let content;
   if (loading && !blocks.length) {
@@ -74,61 +89,34 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
     const next = nextBlock(blocks.filter(b => !cur || b.block_id !== cur.block_id), nowMin);
     const nextLine = next && `Lo próximo: ${blockName(next)} a las ${hhmm(next.start_time)}.`;
 
-    if (cur && cur.block_type === "ocio") {
+    if (cur && cur.block_type !== "ocio") {
+      const { inBlock } = placeTasks(blocks, tasks);
+      const own = inBlock[cur.block_id] || [];
+      const done = blockDone(cur, own, checkins);
       content = (
         <Hero>
           <BlockHeader block={cur} nowMin={nowMin} />
-          <Big>Tiempo libre hasta las {hhmm(cur.end_time)}.</Big>
-          <Soft>Está en el plan, disfrutalo.{nextLine ? ` ${nextLine}` : ""}</Soft>
+          {own.length > 0
+            ? <TaskList tasks={own} subs={subs} onToggle={onToggle} onToggleSub={onToggleSub} onTap={onTap} />
+            : <div><Big>No hay nada puntual.</Big><div style={{ marginTop: 6 }}><Soft>Con estar alcanza.</Soft></div></div>}
+          {own.length > 0 && own.every(t => t.done) && <Soft>Listo el bloque.{nextLine ? ` ${nextLine}` : ""}</Soft>}
+          {!done && <button onClick={() => onCheckin(cur, true)} style={own.length ? { ...BIG_BTN, background: "var(--surface-2)", color: "var(--good)" } : BIG_BTN}>Estuve</button>}
         </Hero>
       );
-    } else if (cur) {
-      const { inBlock } = placeTasks(blocks, tasks);
-      const own = inBlock[cur.block_id] || [];
-      const pending = own.filter(x => !x.done);
-      const candidates = pending.filter(x => !skipped.includes(x.id));
-      const task = candidates[0] || pending[0];
-
-      if (task) {
-        content = (
-          <Hero>
-            <BlockHeader block={cur} nowMin={nowMin} />
+    } else if (cur || closing) {
+      content = (
+        <Hero>
+          {cur && <BlockHeader block={cur} nowMin={nowMin} />}
+          <Big>{cur ? `Tiempo libre hasta las ${hhmm(cur.end_time)}.` : "El día va cerrando."}</Big>
+          <Soft>{cur ? "Está en el plan, disfrutalo." : tomorrowLine}{cur && nextLine ? ` ${nextLine}` : ""}</Soft>
+          {chosenNow.length > 0 && (
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>Para ahora</div>
-              <Big key={task.id}><span className="view-in" style={{ display: "block", whiteSpace: "pre-wrap" }}>{task.text}</span></Big>
-              {task.detail && <div style={{ fontSize: 16, color: "var(--ink-2)", lineHeight: 1.45, marginTop: 6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.detail}</div>}
-              {task.scheduled_time && <div className="num" style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 6 }}>a las {hhmm(task.scheduled_time)}</div>}
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 2 }}>Elegiste hacer ahora</div>
+              <TaskList tasks={chosenNow} subs={subs} onToggle={onToggle} onToggleSub={onToggleSub} onTap={onTap} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <button onClick={async () => { await onToggle(task); setCheer(true); setTimeout(() => setCheer(false), 1600); }} style={BIG_BTN}>
-                Listo
-              </button>
-              {pending.length > 1 && (
-                <button onClick={() => setSkipped(s => (candidates.length <= 1 ? [] : [...s, task.id]))} style={{ ...TEXT_BTN, alignSelf: "center" }}>Otra cosa</button>
-              )}
-            </div>
-          </Hero>
-        );
-      } else if (blockDone(cur, own, checkins)) {
-        content = (
-          <Hero>
-            <BlockHeader block={cur} nowMin={nowMin} />
-            <Big>Listo el bloque.</Big>
-            <Soft>{nextLine || "Lo que queda del bloque es tuyo."}</Soft>
-          </Hero>
-        );
-      } else {
-        content = (
-          <Hero>
-            <BlockHeader block={cur} nowMin={nowMin} />
-            <div>
-              <Big>No hay nada puntual.</Big>
-              <div style={{ marginTop: 8 }}><Soft>Con estar alcanza.</Soft></div>
-            </div>
-            <button onClick={() => onCheckin(cur, true)} style={BIG_BTN}>Estuve</button>
-          </Hero>
-        );
-      }
+          )}
+        </Hero>
+      );
     } else if (next) {
       content = (
         <Hero>
@@ -146,13 +134,10 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "8px 16px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
       {content}
-      {cheer && (
-        <div className="cheer-in" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--good)", fontSize: 16, fontWeight: 600 }}>
-          <Icon name="check" size={18} stroke={2.6} /> Bien ahí
-        </div>
-      )}
-      {!cheer && doneToday > 0 && (
-        <div className="num" style={{ textAlign: "center", fontSize: 15, color: "var(--ink-2)" }}>
+      {closing && <DayClose items={pending} subs={subs} doneToday={doneToday} onAction={onClose} />}
+      {!closing && doneToday > 0 && (
+        <div className="num" style={{ textAlign: "center", fontSize: 15, color: "var(--ink-2)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <span style={{ color: "var(--good)", display: "flex" }}><Icon name="check" size={16} stroke={2.6} /></span>
           Hoy llevás {doneToday} hecha{doneToday === 1 ? "" : "s"}
         </div>
       )}

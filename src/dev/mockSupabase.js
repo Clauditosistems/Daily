@@ -17,12 +17,20 @@ const today = () => ymd(new Date());
 function seed() {
   const t = today();
   const base = { user_id: USER.id, created_at: nowIso(), updated_at: nowIso() };
+  // ?mock=bloque → hoy hay un bloque de trabajo en curso; ?mock=cierre → hoy ya empezó el ocio.
+  // Horarios relativos a la hora actual, para probar sin depender del reloj.
+  const scenario = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("mock") : null;
+  const hm = min => { const m = Math.max(0, Math.min(23 * 60 + 59, min)); return `${pad(Math.floor(m / 60))}:${pad(m % 60)}:00`; };
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const plan = scenario === "bloque"
+    ? [["entreno", nowMin - 180, nowMin - 120], ["trabajo", nowMin - 60, nowMin + 90], ["estudio", nowMin + 100, nowMin + 160], ["ocio", nowMin + 170, nowMin + 230]]
+    : scenario === "cierre"
+      ? [["entreno", nowMin - 300, nowMin - 240], ["trabajo", nowMin - 230, nowMin - 120], ["estudio", nowMin - 110, nowMin - 40], ["ocio", nowMin - 30, nowMin + 120]]
+      : [["entreno", 360, 480], ["trabajo", 540, 780], ["estudio", 840, 1080], ["ocio", 1140, 1320]];
   const blocks = [];
   for (let d = 0; d < 7; d++) {
-    blocks.push({ ...base, id: uuid(), day_of_week: d, start_time: "06:00:00", end_time: "08:00:00", block_type: "entreno", label: null, floating: false });
-    blocks.push({ ...base, id: uuid(), day_of_week: d, start_time: "09:00:00", end_time: "13:00:00", block_type: "trabajo", label: null, floating: false });
-    blocks.push({ ...base, id: uuid(), day_of_week: d, start_time: "14:00:00", end_time: "18:00:00", block_type: "estudio", label: null, floating: false });
-    blocks.push({ ...base, id: uuid(), day_of_week: d, start_time: "19:00:00", end_time: "22:00:00", block_type: "ocio", label: null, floating: false });
+    for (const [type, s, e] of plan)
+      blocks.push({ ...base, id: uuid(), day_of_week: d, start_time: hm(s), end_time: hm(e), block_type: type, label: null, floating: false });
   }
   const feria = { ...base, id: uuid(), text: "Ir a la feria", block_type: "trabajo", days_of_week: [dow(t)], prio: "mid", active: true, generated_until: addDays(t, 7), scheduled_time: "09:30:00" };
   const task = (o) => ({ ...base, id: uuid(), block_type: null, block_id: null, done: false, completed_at: null, rollover_count: 0, routine_id: null,
@@ -33,7 +41,9 @@ function seed() {
     task({ text: "Leer el capítulo 4 y hacer el resumen de las ideas principales para la clase del jueves, con ejemplos propios", block_type: "estudio" }),
     task({ text: "Correr 5 km", block_type: "entreno", done: true, completed_at: nowIso() }),
     task({ text: "Llamar al banco", rollover_count: 2 }),
+    task({ text: "Tomar creatina", routine_id: feria.id, assigned_date: t, block_type: "entreno", id: uuid() }),
   ];
+  tasks[5].routine_id = null;  // (tarea suelta de entreno sin hacer, para el cierre)
   const subs = [
     { text: "Lista de productos", done: true }, { text: "Etiquetas", done: false }, { text: "Llevar al correo", done: false },
   ].map((s, i) => ({ ...base, id: uuid(), task_id: tasks[1].id, position: i, completed_at: s.done ? nowIso() : null, ...s }));
