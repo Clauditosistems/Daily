@@ -3,6 +3,8 @@ import MonthView from "./MonthView";
 import Timeline from "./Timeline";
 import NowView from "./Now";
 import { TaskRow, CheckCircle } from "./TaskRow";
+import { ReviewBanner, ReviewSheet, useReviewCount } from "./Review";
+import { EventSheet, eventDates, notifyLabel } from "./Events";
 import { placeTasks, visibleTasks, blockDone, blockStarted, currentBlock, nowMinutes, closingTime, closingPending, doingNow, setDoingNow } from "./plan";
 import {
   fetchBlocksForDay, fetchTasksForDate, fetchPendingCounts, createTask, updateTask, deleteTask,
@@ -10,6 +12,7 @@ import {
   fetchRoutines, ensureRoutineTasks, rolloverMine, fetchDayOverride, markAtypical, unmarkAtypical,
   fetchCancelledBlocks, setBlockOverride, clearBlockOverride,
   makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin, fetchSettings,
+  fetchEvents, saveEvent, deleteEvent, fetchNotes,
 } from "./supabase";
 import {
   BLOCK_TYPE, TASK_TYPES, PRIO, haptic, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
@@ -395,7 +398,7 @@ function AtypicalSheet({ date, onDone, onClose }) {
     <Sheet title={`Día atípico · ${dayTitle(date)}`} onClose={onClose}>
       <input value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo (opcional): feriado, enfermo, viaje…" style={FIELD} maxLength={120} autoFocus />
       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
-        Se cancelan todos los bloques de este día. Las tareas pendientes pasan al próximo bloque de su tipo (las que no tienen tipo, al día siguiente). Las tareas de rutinas de este día se borran.
+        Se cancelan todos los bloques de este día. Las tareas pendientes pasan al próximo bloque de su tipo (las que no tienen tipo, al día siguiente). Las de rutina se quitan, salvo las que tengan detalle o subtareas: esas se mueven como las demás, para no perder nada.
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -509,6 +512,12 @@ export default function AgendaView({ forceMode }) {
   const [atypicalSheet, setAtypicalSheet] = useState(false);
   const [fallbackClose, setFallbackClose] = useState("19:00");  // cierre si hoy no hay ocio (Ajustes)
   const [nowIds, setNowIds] = useState(() => doingNow(today));   // "Hacerla ahora" de hoy
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [events, setEvents]         = useState([]);
+  const [plans, setPlans]           = useState([]);
+  const [eventSheet, setEventSheet] = useState(null);  // evento existente o borrador {event_date}
+  const [reviewKey, setReviewKey]   = useState(0);
+  const reviewCount = useReviewCount(today, [reviewKey]);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -517,6 +526,8 @@ export default function AgendaView({ forceMode }) {
       .then(fetchRoutines).then(r => setRoutines(r || []))
       .catch(err => { setError(err.message); setRoutines([]); });
     fetchBirthdays().then(setBirthdays).catch(() => {});
+    fetchEvents().then(setEvents).catch(() => {});
+    fetchNotes("plan", false).then(setPlans).catch(() => {});
     fetchSettings().then(s => s?.dayclose_fallback_time && setFallbackClose(hhmm(s.dayclose_fallback_time))).catch(() => {});
   }, []);
 
@@ -674,6 +685,20 @@ export default function AgendaView({ forceMode }) {
     } catch (err) { setError(err.message); }
   }
 
+  async function saveEventSheet(payload) {
+    const saved = await saveEvent(eventSheet.id, payload);
+    setEvents(p => [...p.filter(e => e.id !== saved.id), saved]);
+  }
+  async function removeEvent(id) {
+    await deleteEvent(id);
+    setEvents(p => p.filter(e => e.id !== id));
+  }
+  // Desde el mes: los eventos se abren para editar; cumpleaños y planes llevan a su día.
+  function openCalendarItem(it) {
+    if (it.kind === "event") setEventSheet(it.ref);
+    else pickDay(it.date);
+  }
+
   async function archiveNote(note) {
     try { await updateNote(note.id, { archived: true }); setDayNotes(p => p.filter(n => n.id !== note.id)); }
     catch (err) { setError(err.message); }
@@ -696,6 +721,8 @@ export default function AgendaView({ forceMode }) {
   const isToday = selected === today;
   const year = parseYmd(selected).getFullYear();
   const dayBirthdays = birthdays.filter(b => birthdayOn(b.month, b.day, year) === selected);
+  const dayEvents = events.filter(e => eventDates(e, selected, selected).length)
+    .sort((a, b) => (a.event_time || "99").localeCompare(b.event_time || "99"));
 
   return (
     <>
@@ -748,7 +775,8 @@ export default function AgendaView({ forceMode }) {
       {mode === null && <div style={{ flex: 1, textAlign: "center", color: "var(--ink-3)", fontSize: 13, padding: 30 }}>Cargando…</div>}
 
       {mode === "mes" && (
-        <MonthView anchor={monthAnchor} today={today} selected={selected} birthdays={birthdays} onPickDay={pickDay} />
+        <MonthView anchor={monthAnchor} today={today} selected={selected} events={events} birthdays={birthdays} plans={plans}
+          onPickDay={pickDay} onAddEvent={d => setEventSheet({ event_date: d })} onOpenItem={openCalendarItem} />
       )}
 
       {mode === "linea" && (
@@ -760,17 +788,36 @@ export default function AgendaView({ forceMode }) {
       <div className="view-in" key={`dia-${selected}`} style={{ flex: 1, overflowY: "auto", padding: "4px 16px 28px", display: "flex", flexDirection: "column", gap: 12, opacity: loading ? 0.55 : 1, transition: "opacity 0.2s" }}>
         {error && <div style={ERROR_BOX}>{error}</div>}
 
-        {(dayBirthdays.length > 0 || dayNotes.length > 0) && (
+        {isToday && <ReviewBanner count={reviewCount} onOpen={() => setReviewOpen(true)} />}
+
+        <button onClick={() => setEventSheet({ event_date: selected })}
+          style={{ ...TEXT_BTN, fontSize: 15, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 4, padding: "0 4px", marginBottom: -4 }}>
+          <Icon name="plus" size={17} stroke={2.2} /> Evento
+        </button>
+
+        {(dayEvents.length > 0 || dayBirthdays.length > 0 || dayNotes.length > 0) && (
           <div style={{ ...CARD, padding: "4px 16px" }}>
+            {dayEvents.map((e, i) => (
+              <button key={e.id} onClick={() => setEventSheet(e)}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", width: "100%", border: "none", background: "none", fontFamily: "inherit",
+                  color: "var(--ink)", textAlign: "left", cursor: "pointer", borderTop: i ? "0.5px solid var(--border)" : "none" }}>
+                <span style={{ fontSize: 20 }}>📌</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 16, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                  {e.title}
+                  {e.detail && <span style={{ display: "block", fontSize: 14, color: "var(--ink-2)", marginTop: 2 }}>{e.detail}</span>}
+                  {e.event_time && <span className="num" style={{ display: "block", fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>{hhmm(e.event_time)} · aviso {notifyLabel(e.notify_before_minutes).toLowerCase()}</span>}
+                </span>
+              </button>
+            ))}
             {dayBirthdays.map((b, i) => (
-              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i ? "0.5px solid var(--border)" : "none" }}>
+              <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i || dayEvents.length ? "0.5px solid var(--border)" : "none" }}>
                 <span style={{ fontSize: 20 }}>🎂</span>
                 <span style={{ flex: 1, fontSize: 16 }}>Cumple de {b.name}</span>
                 {b.year && <span className="num" style={{ fontSize: 15, color: "var(--ink-2)" }}>{year - b.year} años</span>}
               </div>
             ))}
             {dayNotes.map((n, i) => (
-              <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i || dayBirthdays.length ? "0.5px solid var(--border)" : "none" }}>
+              <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: i || dayBirthdays.length || dayEvents.length ? "0.5px solid var(--border)" : "none" }}>
                 <span style={{ fontSize: 20 }}>{n.kind === "plan" ? "📅" : "📝"}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 16, wordBreak: "break-word" }}>
                   {n.text}
@@ -853,6 +900,8 @@ export default function AgendaView({ forceMode }) {
           checked={checkins.includes(blockSheet.block_id)} onCheckin={checkin}
           onDone={() => {}} onClose={() => { setBlockSheet(null); reload(); }} />
       )}
+      {eventSheet && <EventSheet key={eventSheet.id || "new-event"} event={eventSheet} onSave={saveEventSheet} onDelete={removeEvent} onClose={() => setEventSheet(null)} />}
+      {reviewOpen && <ReviewSheet today={today} onChanged={() => setReviewKey(k => k + 1)} onClose={() => setReviewOpen(false)} />}
       {atypicalSheet && (
         <AtypicalSheet date={selected} onClose={() => setAtypicalSheet(false)}
           onDone={moved => { setNotice(moved ? `Se movieron ${moved} tarea${moved === 1 ? "" : "s"} a su próximo bloque.` : ""); reload(); }} />

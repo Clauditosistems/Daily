@@ -78,12 +78,71 @@ export async function fetchDayOverride(date) {
 }
 
 // Marca el día y reprograma sus tareas (ver reschedule_day). Devuelve cuántas se movieron.
+// reschedule_day borra las tareas de rutina sin hacer de ese día: antes, las que tienen detalle o
+// subtareas se desvinculan de la rutina, así se mueven como cualquier tarea y no se pierde nada tuyo.
 export async function markAtypical(date, note) {
+  const { data: rt, error: e0 } = await supabase.from("tasks").select("id, detail")
+    .eq("assigned_date", date).eq("done", false).not("routine_id", "is", null);
+  if (e0) throw e0;
+  const subs = await fetchSubtasks(rt.map(t => t.id));
+  const keep = rt.filter(t => (t.detail && t.detail.trim()) || subs[t.id]).map(t => t.id);
+  if (keep.length) {
+    const { error: e1 } = await supabase.from("tasks").update({ routine_id: null }).in("id", keep);
+    if (e1) throw e1;
+  }
   const { error } = await supabase.from("day_overrides").insert({ override_date: date, note: note || null });
   if (error) throw error;
   const { data, error: e2 } = await supabase.rpc("reschedule_day", { p_date: date });
   if (e2) throw e2;
   return data;
+}
+
+// Repaso: un día que ya pasó se marca atípico sin mover ni borrar nada (solo deja de contar).
+export async function markPastAtypical(date, note) {
+  const { error } = await supabase.from("day_overrides").insert({ override_date: date, note: note || null });
+  if (error && error.code !== "23505") throw error;  // ya estaba marcado: está bien
+}
+
+// ─── EVENTOS ─────────────────────────────────────────────────
+// Fecha única, hora opcional, anual opcional. No se marcan ni pasan de día.
+export async function fetchEvents() {
+  const { data, error } = await supabase.from("events").select("*").order("event_date");
+  if (error) throw error;
+  return data;
+}
+
+export async function saveEvent(id, event) {
+  const q = id ? supabase.from("events").update(event).eq("id", id) : supabase.from("events").insert(event);
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteEvent(id) {
+  const { error } = await supabase.from("events").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ─── REPASO ──────────────────────────────────────────────────
+// Tareas de rutina de los últimos días que quedaron sin marcar (ni hechas ni "no la hice"),
+// salvo las de días marcados como atípicos.
+export async function fetchReview(today, days = 7) {
+  const from = addDays(today, -days), to = addDays(today, -1);
+  const [{ data, error }, { data: atyp, error: e2 }] = await Promise.all([
+    supabase.from("tasks").select("*").not("routine_id", "is", null).eq("done", false).is("outcome", null)
+      .gte("assigned_date", from).lte("assigned_date", to).order("assigned_date", { ascending: false }),
+    supabase.from("day_overrides").select("override_date").gte("override_date", from).lte("override_date", to),
+  ]);
+  if (error) throw error;
+  if (e2) throw e2;
+  const off = new Set(atyp.map(o => o.override_date));
+  return data.filter(t => !off.has(t.assigned_date));
+}
+
+// "Hecha" en el repaso: cuenta para el día en que tocaba (mediodía de ese día).
+export async function markDoneOn(id, date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return updateTask(id, { done: true, completed_at: new Date(y, m - 1, d, 12).toISOString() });
 }
 
 export async function unmarkAtypical(id) {

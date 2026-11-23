@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { fetchWeekStats, fetchSavedSummary } from "./supabase";
 import Heatmap from "./Heatmap";
+import { ReviewBanner, ReviewSheet, useReviewCount } from "./Review";
 import { BLOCK_TYPE, parseYmd, todayStr, addDays, weekDates, durationLabel, ERROR_BOX, CARD, LARGE_TITLE, Group, Row, Icon } from "./ui";
 
 // Primero lo logrado; lo pendiente al final y en neutro. Nunca comparaciones hacia abajo.
@@ -42,6 +43,9 @@ export default function SummaryView() {
   const [saved, setSaved]         = useState(false);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewKey, setReviewKey]   = useState(0);
+  const reviewCount = useReviewCount(todayStr(), [reviewKey]);
 
   useEffect(() => {
     let alive = true;
@@ -53,7 +57,7 @@ export default function SummaryView() {
       .catch(err => alive && setError(err.message))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [weekStart]);
+  }, [weekStart, reviewKey]);
 
   const isCurrent = weekStart === thisWeek;
   const better = stats && stats.done_prev > 0 && stats.done > stats.done_prev ? stats.done - stats.done_prev : 0;
@@ -63,6 +67,7 @@ export default function SummaryView() {
   const empty = stats && !stats.done && !stats.blocks_done;
 
   const footer = stats && [
+    stats.steps_done > 0 && `${stats.steps_done} paso${stats.steps_done === 1 ? "" : "s"} de tareas en curso`,
     stats.active_days > 0 && `${stats.active_days} día${stats.active_days === 1 ? "" : "s"} con avances`,
     stats.planned_minutes > 0 && `${durationLabel(stats.planned_minutes)} de bloques`,
     stats.atypical_days > 0 && `${stats.atypical_days} día${stats.atypical_days === 1 ? "" : "s"} atípico${stats.atypical_days === 1 ? "" : "s"}, que no cuentan`,
@@ -86,6 +91,10 @@ export default function SummaryView() {
 
       <div className="view-in" key={weekStart} style={{ flex: 1, overflowY: "auto", padding: "4px 16px 40px", display: "flex", flexDirection: "column", gap: 24, opacity: loading ? 0.55 : 1, transition: "opacity 0.2s" }}>
         {error && <div style={ERROR_BOX}>{error}</div>}
+        {isCurrent && (
+          <ReviewBanner count={reviewCount} onOpen={() => setReviewOpen(true)} title="Antes del resumen"
+            text={`${reviewCount} ${reviewCount === 1 ? "rutina quedó" : "rutinas quedaron"} sin marcar estos días. ¿Las cerramos así el resumen queda completo?`} />
+        )}
         {loading && !stats && <div style={{ color: "var(--ink-2)", fontSize: 15, padding: 20, textAlign: "center" }}>Cargando…</div>}
 
         {stats && <>
@@ -143,6 +152,7 @@ export default function SummaryView() {
           </div>
         </>}
       </div>
+      {reviewOpen && <ReviewSheet today={todayStr()} onChanged={() => setReviewKey(k => k + 1)} onClose={() => setReviewOpen(false)} />}
     </>
   );
 }

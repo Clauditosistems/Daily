@@ -44,6 +44,15 @@ function seed() {
     task({ text: "Tomar creatina", routine_id: feria.id, assigned_date: t, block_type: "entreno", id: uuid() }),
   ];
   tasks[5].routine_id = null;  // (tarea suelta de entreno sin hacer, para el cierre)
+  // Rutinas de días pasados sin marcar (para el repaso)
+  const creatina = { ...feria, id: uuid(), text: "Tomar creatina", block_type: "entreno", days_of_week: [0, 1, 2, 3, 4, 5, 6], scheduled_time: null };
+  tasks.push(
+    task({ text: "Ir a la feria", routine_id: feria.id, assigned_date: addDays(t, -7), block_type: "trabajo", detail: "Remeras rojas" }),
+    task({ text: "Tomar creatina", routine_id: creatina.id, assigned_date: addDays(t, -1), block_type: "entreno" }),
+    task({ text: "Tomar creatina", routine_id: creatina.id, assigned_date: addDays(t, -2), block_type: "entreno" }),
+    task({ text: "Tomar creatina", routine_id: creatina.id, assigned_date: addDays(t, -3), block_type: "entreno", done: true, completed_at: nowIso() }),
+  );
+  feria.__extra = creatina;
   const subs = [
     { text: "Lista de productos", done: true }, { text: "Etiquetas", done: false }, { text: "Llevar al correo", done: false },
   ].map((s, i) => ({ ...base, id: uuid(), task_id: tasks[1].id, position: i, completed_at: s.done ? nowIso() : null, ...s }));
@@ -52,7 +61,11 @@ function seed() {
       notify_birthdays: true, birthday_day_before: false, morning_time: "08:00:00", notify_midblock: true, notify_ocio: true, notify_dayclose: true,
       notify_plans: true, dayclose_fallback_time: "19:00:00" }],
     weekly_blocks: blocks, block_overrides: [], day_overrides: [], block_checkins: [],
-    routines: [feria], tasks, subtasks: subs, events: [],
+    routines: [feria, feria.__extra], tasks, subtasks: subs,
+    events: [
+      { ...base, id: uuid(), title: "Turno con el dentista", detail: null, event_date: addDays(t, 3), event_time: "10:30:00", yearly: false, notify_before_minutes: 30 },
+      { ...base, id: uuid(), title: "Aniversario", detail: "Reservar cena", event_date: "2020-" + t.slice(5), event_time: null, yearly: true, notify_before_minutes: 0 },
+    ],
     notes: [
       { ...base, id: uuid(), kind: "note", text: "Una nota larga\ncon varias líneas\n\ny un párrafo aparte.", note_date: null, remind_time: null, archived: false, legacy_id: null },
       { ...base, id: uuid(), kind: "plan", text: "Activar flex el lunes", note_date: addDays(t, 2), remind_time: null, archived: false, legacy_id: null },
@@ -109,6 +122,7 @@ class Query {
   neq(c, v) { this.filters.push(r => r[c] !== v); return this; }
   is(c, v) { this.filters.push(r => (r[c] ?? null) === v); return this; }
   in(c, vs) { this.filters.push(r => vs.includes(r[c])); return this; }
+  not(c, op, v) { if (op === "is") this.filters.push(r => (r[c] ?? null) !== v); else this.filters.push(r => r[c] !== v); return this; }
   gte(c, v) { this.filters.push(r => r[c] >= v); return this; }
   lte(c, v) { this.filters.push(r => r[c] <= v); return this; }
   gt(c, v) { this.filters.push(r => r[c] > v); return this; }
