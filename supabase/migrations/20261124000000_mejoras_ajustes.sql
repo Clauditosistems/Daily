@@ -1,4 +1,4 @@
--- Mejoras · ajustes finales. PENDIENTE DE APROBACIÓN: todavía NO se corrió en Supabase.
+-- Mejoras · ajustes finales. APLICADO en Supabase el 23/11/2026 (aprobado por el usuario; backup previo en backups/2026-11-24-pre-ajustes).
 -- No agrega tablas ni columnas y no modifica datos existentes: solo reemplaza dos funciones.
 --
 -- 1) reschedule_day (marcar un día como atípico): las tareas de rutina con detalle o subtareas
