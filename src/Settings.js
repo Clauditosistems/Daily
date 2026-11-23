@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { exportAll, parseBackup, planImport, runImport } from "./backup";
 import {
   supabase, fetchSettings, updateSettings,
   localTasksToMigrate, migrateLocalTasks, localNotesToMigrate, migrateLocalNotes,
 } from "./supabase";
 import {
-  hhmm, ERROR_BOX, GHOST_BTN, DANGER_BTN, Group, Row, Toggle, Segmented, ScreenTitle, useBackHandler, hapticsOn, setHaptics, haptic,
+  hhmm, ERROR_BOX, GHOST_BTN, PRIMARY_BTN, DANGER_BTN, Group, Row, Toggle, Segmented, ScreenTitle, useBackHandler, hapticsOn, setHaptics, haptic,
 } from "./ui";
 import BlocksView from "./Blocks";
 import PushSettings from "./PushSettings";
@@ -100,6 +101,107 @@ function NotificationPrefs() {
   );
 }
 
+const TABLE_LABEL = {
+  settings: "configuración", weekly_blocks: "bloques", routines: "rutinas", tasks: "tareas",
+  block_overrides: "cambios de bloques", day_overrides: "días atípicos", block_checkins: "\"estuve\"",
+  notes: "notas", birthdays: "cumpleaños", weekly_summaries: "resúmenes", push_subscriptions: "dispositivos", push_log: "avisos enviados",
+};
+const fmtDate = iso => new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function Backup() {
+  const [busy, setBusy]     = useState("");   // "export" | "read" | "import"
+  const [status, setStatus] = useState("");
+  const [error, setError]   = useState("");
+  const [pending, setPending] = useState(null);  // { backup, plan }
+  const fileRef = useRef(null);
+
+  async function doExport() {
+    setBusy("export"); setError(""); setStatus("");
+    try {
+      const b = await exportAll();
+      const total = Object.values(b.counts).reduce((s, n) => s + n, 0);
+      const local = Object.values(b.local_counts).reduce((s, n) => s + n, 0);
+      setStatus(`Listo: ${total} registros${local ? ` y ${local} de este dispositivo` : ""}. Quedó en Descargas.`);
+    } catch (err) { setError(err.message); }
+    finally { setBusy(""); }
+  }
+
+  async function onFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy("read"); setError(""); setStatus(""); setPending(null);
+    try {
+      const backup = parseBackup(await file.text());
+      setPending({ backup, plan: await planImport(backup) });
+    } catch (err) { setError(err.message); }
+    finally { setBusy(""); }
+  }
+
+  async function doImport() {
+    setBusy("import"); setError(""); setStatus("");
+    try {
+      const r = await runImport(pending.plan);  // descarga primero una copia de lo que hay ahora
+      const added = r.tables.reduce((s, t) => s + t.added, 0);
+      const skipped = r.tables.reduce((s, t) => s + t.conflicts, 0);
+      setStatus(`Listo: se agregaron ${added} registros${r.local ? ` y ${r.local} de este dispositivo` : ""}.` +
+        (skipped ? ` ${skipped} ya tenían su lugar ocupado y se dejaron como estaban.` : "") +
+        " Antes se descargó una copia de cómo estaba todo.");
+      setPending(null);
+    } catch (err) { setError(err.message); }
+    finally { setBusy(""); }
+  }
+
+  const missingRows = pending?.plan.tables.filter(p => p.missing.length) || [];
+  const localRows = pending?.plan.local ? Object.values(pending.plan.local).reduce((s, v) => s + (v?.length || 0), 0) : 0;
+
+  return (
+    <Group header="Tus datos"
+      footer={status || "Exportar baja un archivo con todo: bloques, tareas, rutinas, notas, ajustes y lo que haya quedado guardado en este celu. Importar solo agrega lo que falta; nunca borra ni cambia nada."}>
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        {!pending && <>
+          <button onClick={doExport} disabled={!!busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>
+            {busy === "export" ? "Preparando…" : "Exportar todo"}
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={!!busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>
+            {busy === "read" ? "Leyendo…" : "Importar backup"}
+          </button>
+          <input ref={fileRef} type="file" accept="application/json,.json" onChange={onFile} style={{ display: "none" }} />
+        </>}
+
+        {pending && (
+          <>
+            <div style={{ fontSize: 15, lineHeight: 1.45 }}>
+              Backup del {fmtDate(pending.backup.exported_at)}.{" "}
+              {pending.plan.totalMissing === 0 && !localRows
+                ? "Ya tenés todo lo que tiene este archivo. No hace falta agregar nada."
+                : <>Se van a agregar solo los registros que faltan:</>}
+            </div>
+            {(missingRows.length > 0 || localRows > 0) && (
+              <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                {missingRows.map(p => <div key={p.table}>{p.missing.length} {TABLE_LABEL[p.table] || p.table}</div>)}
+                {localRows > 0 && <div>Datos de la versión anterior en este celu (solo los que no estén)</div>}
+              </div>
+            )}
+            <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.45 }}>
+              Lo que ya tenés no se toca. Antes de empezar se descarga una copia de cómo está todo ahora.
+            </div>
+            {(pending.plan.totalMissing > 0 || localRows > 0) && (
+              <button onClick={doImport} disabled={!!busy} style={{ ...PRIMARY_BTN, opacity: busy ? 0.6 : 1 }}>
+                {busy === "import" ? "Agregando…" : "Agregar lo que falta"}
+              </button>
+            )}
+            <button onClick={() => setPending(null)} disabled={!!busy} style={{ ...GHOST_BTN, opacity: busy ? 0.6 : 1 }}>
+              {pending.plan.totalMissing > 0 || localRows > 0 ? "Cancelar" : "Listo"}
+            </button>
+          </>
+        )}
+        {error && <div style={ERROR_BOX}>{error}</div>}
+      </div>
+    </Group>
+  );
+}
+
 function LocalData() {
   const [counts, setCounts] = useState(null);
   const [status, setStatus] = useState("");
@@ -163,6 +265,7 @@ export default function SettingsView({ session, onClose }) {
         <PushSettings />
         <NotificationPrefs />
         <Appearance />
+        <Backup />
         <LocalData />
 
         <Group header="Cuenta" footer={`Zona horaria: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`}>
