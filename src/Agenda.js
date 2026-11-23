@@ -5,6 +5,7 @@ import NowView from "./Now";
 import { placeTasks, visibleTasks, blockDone, blockStarted, currentBlock, nowMinutes } from "./plan";
 import {
   fetchBlocksForDay, fetchTasksForDate, fetchPendingCounts, createTask, updateTask, deleteTask,
+  fetchTask, fetchSubtasks, updateSubtask, saveSubtasks,
   fetchRoutines, ensureRoutineTasks, rolloverMine, fetchDayOverride, markAtypical, unmarkAtypical,
   fetchCancelledBlocks, setBlockOverride, clearBlockOverride,
   makeRoutineFromTask, fetchNotesForDate, updateNote, fetchBirthdays, fetchCheckins, setCheckin,
@@ -12,7 +13,7 @@ import {
 import {
   BLOCK_TYPE, TASK_TYPES, PRIO, haptic, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
   FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, TEXT_BTN, ERROR_BOX, SECTION, CARD, LARGE_TITLE, Icon, Toggle,
-  Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN
+  Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN, AutoTextarea
 } from "./ui";
 
 // ─── TIRA SEMANAL ────────────────────────────────────────────
@@ -44,34 +45,75 @@ function WeekStrip({ selected, today, counts, onSelect }) {
 }
 
 // ─── TAREA ───────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onTap, showType, divider }) {
+function CheckCircle({ done, onClick, size = 24, label }) {
+  return (
+    <button onClick={onClick} aria-label={label || (done ? "Marcar pendiente" : "Marcar hecha")}
+      style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", transition: "background 0.2s",
+        border: done ? "none" : "1.6px solid var(--ink-3)", background: done ? "var(--good-fill)" : "transparent" }}>
+      {done && <span className="check-pop" style={{ display: "flex" }}><Icon name="check" size={Math.round(size * 0.58)} stroke={3} /></span>}
+    </button>
+  );
+}
+
+// Progreso de subtareas: "2/3" y una barra chica. Neutro: nunca rojo.
+function SubProgress({ done, total, open, onClick }) {
+  return (
+    <button onClick={onClick} aria-expanded={open} aria-label={`Subtareas: ${done} de ${total} hechas. ${open ? "Ocultar" : "Ver"}`}
+      style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: "6px 0 0", cursor: "pointer", fontFamily: "inherit", color: "var(--ink-2)" }}>
+      <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{done}/{total}</span>
+      <span style={{ width: 44, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
+        <span style={{ display: "block", width: `${Math.round((done / total) * 100)}%`, height: "100%", background: "var(--good-fill)", borderRadius: 2, transition: "width 0.4s var(--ease-spring)" }} />
+      </span>
+      <Icon name="down" size={15} stroke={2.2} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+    </button>
+  );
+}
+
+function TaskRow({ task, subtasks = [], onToggle, onToggleSub, onTap, showType, divider }) {
+  const [open, setOpen] = useState(false);
   const t = BLOCK_TYPE[task.block_type];
   const meta = [
     task.scheduled_time && hhmm(task.scheduled_time),
     showType && t && `${t.icon} ${t.label}`,
     task.routine_id && "Se repite",
   ].filter(Boolean);
+  const subsDone = subtasks.filter(s => s.done).length;
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 0", borderTop: divider ? "0.5px solid var(--border)" : "none" }}>
-      <button onClick={() => onToggle(task)} aria-label={task.done ? "Marcar pendiente" : "Marcar hecha"}
-        style={{ width: 24, height: 24, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0, marginTop: 0,
-          display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", transition: "background 0.2s",
-          border: task.done ? "none" : "1.6px solid var(--ink-3)", background: task.done ? "var(--good-fill)" : "transparent" }}>
-        {task.done && <span className="check-pop" style={{ display: "flex" }}><Icon name="check" size={14} stroke={3} /></span>}
-      </button>
-      <button onClick={() => onTap(task)}
-        style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
-        <span style={{ display: "block", fontSize: 16, lineHeight: 1.35, wordBreak: "break-word", transition: "color 0.2s",
-          color: task.done ? "var(--ink-3)" : "var(--ink)", textDecoration: task.done ? "line-through" : "none" }}>
-          {task.prio === "high" && !task.done && <span style={{ color: "var(--prio-high)", fontWeight: 700, marginRight: 5 }}>!!</span>}
-          {task.text}
-        </span>
-        {meta.length > 0 && (
-          <span className="num" style={{ display: "flex", gap: 10, fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>
-            {meta.map((m, i) => <span key={i}>{m}</span>)}
+      <CheckCircle done={task.done} onClick={() => onToggle(task)} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <button onClick={() => onTap(task)}
+          style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+          <span style={{ display: "block", fontSize: 16, lineHeight: 1.35, whiteSpace: "pre-wrap", wordBreak: "break-word", transition: "color 0.2s",
+            color: task.done ? "var(--ink-3)" : "var(--ink)", textDecoration: task.done ? "line-through" : "none" }}>
+            {task.prio === "high" && !task.done && <span style={{ color: "var(--prio-high)", fontWeight: 700, marginRight: 5 }}>!!</span>}
+            {task.text}
           </span>
+          {task.detail && (
+            <span style={{ display: "block", fontSize: 14, lineHeight: 1.4, color: task.done ? "var(--ink-3)" : "var(--ink-2)", marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {task.detail}
+            </span>
+          )}
+          {meta.length > 0 && (
+            <span className="num" style={{ display: "flex", gap: 10, fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>
+              {meta.map((m, i) => <span key={i}>{m}</span>)}
+            </span>
+          )}
+        </button>
+        {subtasks.length > 0 && <SubProgress done={subsDone} total={subtasks.length} open={open} onClick={() => setOpen(o => !o)} />}
+        {open && (
+          <div className="view-in" style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 6 }}>
+            {subtasks.map(s => (
+              <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "5px 0" }}>
+                <CheckCircle size={20} done={s.done} onClick={() => onToggleSub(s)} label={s.done ? `Desmarcar ${s.text}` : `Marcar ${s.text}`} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 1.35, wordBreak: "break-word",
+                  color: s.done ? "var(--ink-3)" : "var(--ink)", textDecoration: s.done ? "line-through" : "none" }}>{s.text}</span>
+              </div>
+            ))}
+          </div>
         )}
-      </button>
+      </div>
     </div>
   );
 }
@@ -113,9 +155,57 @@ function StuckPrompt({ task, onSplit, onMove, onRelease }) {
   );
 }
 
-function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) {
+// Subtareas dentro del editor: un solo nivel. Escribís, Enter, y se abre la siguiente.
+function SubtaskEditor({ subs, setSubs, draft, setDraft }) {
+  const inputRef = useRef(null);
+  const done = subs.filter(s => s.done).length;
+
+  function add() {
+    const v = draft.trim();
+    if (!v) return;
+    setSubs(p => [...p, { key: `n${Date.now()}${Math.random()}`, text: v, done: false }]);
+    setDraft("");
+    inputRef.current?.focus();
+  }
+  const change = (i, patch) => setSubs(p => p.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+
+  return (
+    <div>
+      <div style={LABEL}>Subtareas{subs.length ? <span className="num" style={{ fontWeight: 500 }}> · {done}/{subs.length}</span> : null}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {subs.map((s, i) => (
+          <div key={s.id || s.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <CheckCircle size={22} done={s.done} onClick={() => change(i, { done: !s.done })} label={s.done ? "Desmarcar subtarea" : "Marcar subtarea"} />
+            <input value={s.text} onChange={e => change(i, { text: e.target.value })} aria-label={`Subtarea ${i + 1}`}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); inputRef.current?.focus(); } }}
+              style={{ ...FIELD, padding: "8px 11px", color: s.done ? "var(--ink-3)" : "var(--ink)", textDecoration: s.done ? "line-through" : "none" }} />
+            <button onClick={() => setSubs(p => p.filter((_, j) => j !== i))} aria-label={`Quitar subtarea ${s.text}`}
+              style={{ width: 30, height: 30, border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", padding: 0, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="close" size={16} stroke={2.2} />
+            </button>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 22, display: "flex", justifyContent: "center", color: "var(--ink-3)", flexShrink: 0 }}><Icon name="plus" size={18} stroke={2.2} /></span>
+          <input ref={inputRef} value={draft} onChange={e => setDraft(e.target.value)} placeholder="Agregar subtarea" aria-label="Nueva subtarea"
+            enterKeyHint="next" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }} onBlur={add}
+            style={{ ...FIELD, padding: "8px 11px" }} />
+          <span style={{ width: 30, flexShrink: 0 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const sameSubs = (a, b) => a.length === b.length && a.every((s, i) => s.id === b[i].id && s.text === b[i].text && s.done === b[i].done);
+
+function TaskSheet({ task, initialBlocks, initialSubs = [], onSave, onDelete, onSplit, onClose }) {
   const isNew = !task.id;
   const [text, setText]           = useState(task.text || "");
+  const [detail, setDetail]       = useState(task.detail || "");
+  const [subs, setSubs]           = useState(() => initialSubs.map(s => ({ ...s })));
+  const [subDraft, setSubDraft]   = useState("");  // lo que quedó escrito en "Agregar subtarea" también se guarda
   const [date, setDate]           = useState(task.assigned_date);
   const [blockType, setBlockType] = useState(task.block_type ?? null);
   const [prio, setPrio]           = useState(task.prio || "mid");
@@ -138,14 +228,31 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
 
   const toggleRepeatDay = d => setRepeatDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
 
+  const cleanSubs = [...subs, ...(subDraft.trim() ? [{ text: subDraft, done: false }] : [])]
+    .map(s => ({ ...s, text: s.text.trim() })).filter(s => s.text);
+  const dirty = isNew
+    ? !!(text.trim() || detail.trim() || cleanSubs.length)
+    : text.trim() !== task.text || (detail.trim() || null) !== (task.detail || null) || date !== task.assigned_date
+      || blockType !== (task.block_type ?? null) || prio !== (task.prio || "mid") || (time || "") !== hhmm(task.scheduled_time)
+      || blockId !== (task.block_id ?? null) || repeat || !sameSubs(cleanSubs, initialSubs);
+
   async function save() {
+    if (busy) return;
     if (!text.trim()) return setError("Escribí la tarea.");
     if (!date) return setError("Elegí una fecha.");
     if (repeat && !repeatDays.length) return setError("Elegí al menos un día para repetir.");
-    const changes = { text: text.trim(), assigned_date: date, block_type: blockType, prio, scheduled_time: time || null, block_id: blockId };
+    const changes = { text: text.trim(), detail: detail.trim() || null, assigned_date: date, block_type: blockType, prio, scheduled_time: time || null, block_id: blockId };
     setBusy(true); setError("");
-    try { await onSave(changes, repeat ? repeatDays : null); onClose(); }
+    try { await onSave(changes, repeat ? repeatDays : null, { before: initialSubs, after: cleanSubs }); onClose(); }
     catch (err) { setError(err.message); setBusy(false); }
+  }
+
+  // Tocar afuera, la cruz o "atrás": guarda lo escrito (si no hay cambios, solo cierra).
+  function closeSaving() {
+    if (busy) return;
+    if (!dirty) return onClose();
+    if (isNew && !text.trim()) return onClose();  // nada para guardar todavía
+    save();
   }
 
   async function remove() {
@@ -155,15 +262,26 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
   }
 
   return (
-    <Sheet title={isNew ? "Nueva tarea" : "Editar tarea"} onClose={onClose}>
+    <Sheet title={isNew ? "Nueva tarea" : "Editar tarea"} onClose={closeSaving}>
       {!isNew && !task.done && !task.routine_id && task.rollover_count >= 3 && (
         <StuckPrompt task={task}
           onSplit={async parts => { await onSplit(task, parts); onClose(); }}
           onMove={async d => { await onSave({ assigned_date: d, block_id: null, rollover_count: 0 }); onClose(); }}
           onRelease={async () => { await onDelete(task.id); onClose(); }} />
       )}
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={2} autoFocus={isNew}
-        placeholder="¿Qué hay que hacer?" style={{ ...FIELD, resize: "none", lineHeight: 1.45 }} />
+      <AutoTextarea value={text} onChange={setText} minRows={1} autoFocus={isNew}
+        placeholder="¿Qué hay que hacer?" aria-label="Tarea" style={{ fontSize: 17, fontWeight: 500 }} />
+      <div>
+        <div style={LABEL}>Detalle (opcional)</div>
+        <AutoTextarea value={detail} onChange={setDetail} minRows={2} aria-label="Detalle"
+          placeholder={task.routine_id ? "Lo específico de este día. Ej: comprar remeras rojas" : "Notas, pasos, lo específico…"} />
+        {task.routine_id && (
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.45 }}>
+            Es solo de este día: la rutina no lo toca. Si no la hacés, pasa a la próxima vez.
+          </div>
+        )}
+      </div>
+      <SubtaskEditor subs={subs} setSubs={setSubs} draft={subDraft} setDraft={setSubDraft} />
       <div>
         <div style={LABEL}>Día</div>
         <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...FIELD, fontVariantNumeric: "tabular-nums" }} />
@@ -201,7 +319,7 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
         <PrioPicker value={prio} onChange={setPrio} />
       </div>
       {task.routine_id
-        ? <div style={{ fontSize: 13, color: "var(--ink-2)" }}>Esta tarea viene de una rutina. Los cambios aplican solo a este día; la rutina se edita en la pestaña Rutinas.</div>
+        ? <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.45 }}>Esta tarea viene de una rutina. Los cambios aplican solo a este día; la rutina se edita en la pestaña Rutinas y nunca pisa lo que cambies acá.</div>
         : (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -217,17 +335,29 @@ function TaskSheet({ task, initialBlocks, onSave, onDelete, onSplit, onClose }) 
           </div>
         )}
       {error && <div style={ERROR_BOX}>{error}</div>}
-      <div style={{ display: "flex", gap: 8 }}>
-        {!isNew && <button onClick={remove} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
-        <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {!isNew && <ConfirmDelete busy={busy} onConfirm={remove} />}
+        {isNew && <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Descartar</button>}
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Guardar"}</button>
       </div>
     </Sheet>
   );
 }
 
+// Eliminar siempre pide confirmación.
+function ConfirmDelete({ busy, onConfirm, label = "Eliminar" }) {
+  const [ask, setAsk] = useState(false);
+  if (!ask) return <button onClick={() => setAsk(true)} disabled={busy} style={{ ...DANGER_BTN, flex: 1 }}>{label}</button>;
+  return (
+    <span style={{ flex: 2, display: "flex", alignItems: "center", gap: 4 }}>
+      <button onClick={onConfirm} disabled={busy} style={{ ...DANGER_BTN, fontWeight: 600 }}>Sí, eliminar</button>
+      <button onClick={() => setAsk(false)} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>No</button>
+    </span>
+  );
+}
+
 // ─── BLOQUE ──────────────────────────────────────────────────
-function BlockCard({ block, tasks, isNow, started, done, onAdd, onEditDay, onToggle, onTap, onCheckin }) {
+function BlockCard({ block, tasks, subs = {}, isNow, started, done, onAdd, onEditDay, onToggle, onToggleSub, onTap, onCheckin }) {
   const t = BLOCK_TYPE[block.block_type] || BLOCK_TYPE.otro;
   const isOcio = block.block_type === "ocio";
   return (
@@ -249,7 +379,7 @@ function BlockCard({ block, tasks, isNow, started, done, onAdd, onEditDay, onTog
         <div style={{ fontSize: 15, color: "var(--ink-2)", padding: "4px 0 12px" }}>Tiempo libre. Está en el plan.</div>
       ) : <>
         <div>
-          {tasks.map((task, i) => <TaskRow key={task.id} task={task} onToggle={onToggle} onTap={onTap} divider={i > 0} />)}
+          {tasks.map((task, i) => <TaskRow key={task.id} task={task} subtasks={subs[task.id]} onToggle={onToggle} onToggleSub={onToggleSub} onTap={onTap} divider={i > 0} />)}
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: tasks.length ? "0.5px solid var(--border)" : "none" }}>
           <button onClick={() => onAdd(block)} style={{ ...TEXT_BTN, fontSize: 15, display: "flex", alignItems: "center", gap: 4, padding: "10px 0" }}>
@@ -369,10 +499,11 @@ function Composer({ types, onAdd }) {
           <BlockTypePicker value={blockType} onChange={setBlockType} allowNone types={types} />
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+        <AutoTextarea value={text} onChange={setText} maxRows={6}
+          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
           placeholder="Nueva tarea" aria-label="Nueva tarea para este día"
-          style={{ ...FIELD, borderRadius: 20, padding: "10px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
+          style={{ flex: 1, minWidth: 0, width: "auto", borderRadius: 20, padding: "9px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
         <button onClick={send} disabled={busy || !text.trim()} aria-label="Agregar"
           style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center", opacity: busy || !text.trim() ? 0.35 : 1, transition: "opacity 0.2s" }}>
@@ -394,18 +525,21 @@ const monthTitle = s => {
 const firstOfMonth = (s, n = 0) => { const d = parseYmd(s); return ymd(new Date(d.getFullYear(), d.getMonth() + n, 1)); };
 
 // Antes de la primera: "7 cosas para hoy". Después: lo hecho, en positivo. Nunca "0 de 7".
-function DayProgress({ tasks }) {
+function DayProgress({ tasks, subs = {} }) {
   if (!tasks.length) return null;
   const done = tasks.filter(t => t.done).length;
-  if (done === 0) return <div className="num" style={{ fontSize: 15, color: "var(--ink-2)" }}>{tasks.length} cosa{tasks.length === 1 ? "" : "s"} para hoy</div>;
-  const pct = Math.round((done / tasks.length) * 100);
+  // El avance parcial (subtareas hechas de tareas abiertas) también suma a la barra.
+  const partial = tasks.filter(t => !t.done && subs[t.id]?.length)
+    .reduce((s, t) => s + subs[t.id].filter(x => x.done).length / subs[t.id].length, 0);
+  if (done === 0 && partial === 0) return <div className="num" style={{ fontSize: 15, color: "var(--ink-2)" }}>{tasks.length} cosa{tasks.length === 1 ? "" : "s"} para hoy</div>;
+  const pct = Math.round(((done + partial) / tasks.length) * 100);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <div role="img" aria-label={`${done} hechas`} style={{ flex: 1, height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: "var(--good-fill)", borderRadius: 2, transition: "width 0.5s var(--ease-spring)" }} />
       </div>
       <span className="num" style={{ fontSize: 15, color: "var(--good)", fontWeight: 600, whiteSpace: "nowrap" }}>
-        {done === tasks.length ? "Todo hecho" : `${done} hecha${done === 1 ? "" : "s"}`}
+        {done === tasks.length ? "Todo hecho" : done === 0 ? "En marcha" : `${done} hecha${done === 1 ? "" : "s"}`}
       </span>
     </div>
   );
@@ -432,6 +566,7 @@ export default function AgendaView({ forceMode }) {
   const [routines, setRoutines] = useState(null);
   const [blocks, setBlocks]     = useState([]);
   const [tasks, setTasks]       = useState([]);
+  const [subs, setSubs]         = useState({});  // { task_id: [subtareas] }
   const [dayOverride, setDayOverride] = useState(null);
   const [cancelled, setCancelled]     = useState([]);
   const [reloadKey, setReloadKey]     = useState(0);
@@ -471,8 +606,9 @@ export default function AgendaView({ forceMode }) {
           fetchNotesForDate(selected),
           fetchCheckins(selected),
         ]);
+        const s = await fetchSubtasks(t.map(x => x.id));
         if (id !== requestId.current) return;  // el usuario ya cambió de día
-        setBlocks(b); setTasks(t); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setCheckins(k); setError("");
+        setBlocks(b); setTasks(t); setSubs(s); setCounts(c); setDayOverride(o); setCancelled(x); setDayNotes(n); setCheckins(k); setError("");
         if (selected === today) setModeState(m => m ?? (!o && currentBlock(b.filter(z => !z.floating), nowMinutes()) ? "ahora" : "dia"));
       } catch (err) {
         if (id === requestId.current) setError(err.message);
@@ -509,13 +645,34 @@ export default function AgendaView({ forceMode }) {
     });
   }
 
-  async function toggle(task) {
-    if (!task.done) haptic();
-    try { applyTask(await updateTask(task.id, { done: !task.done })); refreshCounts(); }
-    catch (err) { setError(err.message); }
+  // Vuelve a leer una tarea y sus subtareas (la base las sincroniza entre sí).
+  async function refreshTask(taskId) {
+    const [t, s] = await Promise.all([fetchTask(taskId), fetchSubtasks([taskId])]);
+    applyTask(t);
+    setSubs(p => ({ ...p, [taskId]: s[taskId] || [] }));
   }
 
-  async function saveTask(changes, repeatDays) {
+  async function toggle(task) {
+    if (!task.done) haptic();
+    try {
+      const updated = await updateTask(task.id, { done: !task.done });
+      applyTask(updated);
+      if (subs[task.id]?.length) await refreshTask(task.id);  // marcar la tarea marca sus subtareas
+      refreshCounts();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function toggleSub(sub) {
+    if (!sub.done) haptic();
+    setSubs(p => ({ ...p, [sub.task_id]: (p[sub.task_id] || []).map(s => (s.id === sub.id ? { ...s, done: !s.done } : s)) }));
+    try {
+      await updateSubtask(sub.id, { done: !sub.done });
+      await refreshTask(sub.task_id);  // la última hecha completa la tarea; desmarcar una la reabre
+      refreshCounts();
+    } catch (err) { setError(err.message); refreshTask(sub.task_id).catch(() => {}); }
+  }
+
+  async function saveTask(changes, repeatDays, subOps) {
     let saved = sheet.id ? await updateTask(sheet.id, changes) : await createTask(changes);
     if (repeatDays) {
       const { routine, task } = await makeRoutineFromTask(saved, repeatDays);
@@ -523,6 +680,10 @@ export default function AgendaView({ forceMode }) {
       setRoutines(p => [...p, routine]);  // recarga y genera las próximas instancias
     }
     applyTask(saved);
+    if (subOps && !sameSubs(subOps.after, subOps.before)) {
+      await saveSubtasks(saved.id, subOps.before, subOps.after);
+      await refreshTask(saved.id);
+    }
     refreshCounts();
   }
 
@@ -616,7 +777,7 @@ export default function AgendaView({ forceMode }) {
             </div>
           </div>
           <WeekStrip selected={selected} today={today} counts={counts} onSelect={setSelected} />
-          <DayProgress tasks={shownTasks} />
+          <DayProgress tasks={shownTasks} subs={subs} />
         </>}
         {mode === "mes" && firstOfMonth(today) !== monthAnchor && (
           <button onClick={() => setMonthAnchor(firstOfMonth(today))} style={{ ...LINK_BTN, alignSelf: "flex-start", fontWeight: 600 }}>Volver a este mes</button>
@@ -704,14 +865,14 @@ export default function AgendaView({ forceMode }) {
             done={blockDone(b, inBlock[b.block_id], checkins)}
             onCheckin={checkin}
             onAdd={block => setSheet({ assigned_date: selected, block_type: block.block_type, block_id: block.block_id, prio: "mid" })}
-            onEditDay={setBlockSheet}
-            onToggle={toggle} onTap={setSheet} />
+            onEditDay={setBlockSheet} subs={subs}
+            onToggle={toggle} onToggleSub={toggleSub} onTap={setSheet} />
         ))}
 
         {loose.length > 0 && (
           <section style={{ ...CARD, padding: "14px 16px 4px" }}>
             <div style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", paddingBottom: 4 }}>Sin bloque</div>
-            {loose.map((t, i) => <TaskRow key={t.id} task={t} onToggle={toggle} onTap={setSheet} showType divider={i > 0} />)}
+            {loose.map((t, i) => <TaskRow key={t.id} task={t} subtasks={subs[t.id]} onToggle={toggle} onToggleSub={toggleSub} onTap={setSheet} showType divider={i > 0} />)}
           </section>
         )}
 
@@ -728,6 +889,7 @@ export default function AgendaView({ forceMode }) {
 
       {sheet && (
         <TaskSheet key={sheet.id || "new"} task={sheet} initialBlocks={sheet.assigned_date === selected ? blocks : null}
+          initialSubs={(sheet.id && subs[sheet.id]) || []}
           onSave={saveTask} onDelete={removeTask} onSplit={splitTask} onClose={() => setSheet(null)} />
       )}
       {blockSheet && (

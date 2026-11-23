@@ -5,7 +5,7 @@ import {
 } from "./supabase";
 import {
   hhmm, parseYmd, todayStr, addDays, birthdayOn,
-  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented
+  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented, AutoTextarea
 } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -30,6 +30,7 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
   const [time, setTime]   = useState(hhmm(note.remind_time));
   const [error, setError] = useState("");
   const [busy, setBusy]   = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   async function run(action) {
     setBusy(true); setError("");
@@ -38,6 +39,7 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
   }
 
   function save() {
+    if (busy) return;
     if (!text.trim()) return setError(isPlan ? "Contá cuál es el plan." : "Escribí algo.");
     if (isPlan && !date) return setError("Elegí el día del plan.");
     const changes = isIdea
@@ -46,12 +48,23 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
     run(() => onSave(changes));
   }
 
+  const dirty = isNew
+    ? !!text.trim() || (isPlan && !!note.text)
+    : text.trim() !== note.text || (!isIdea && ((date || null) !== (note.note_date || null) || (date && time ? time : "") !== hhmm(note.remind_time)));
+
+  // Tocar afuera, la cruz o "atrás": guarda lo escrito (si no hay cambios, solo cierra).
+  function closeSaving() {
+    if (busy) return;
+    if (!dirty || !text.trim()) return onClose();
+    save();
+  }
+
   const title = isPlan ? (isNew ? "Nuevo plan" : "Plan") : isIdea ? "Idea" : "Nota";
   return (
-    <Sheet title={title} onClose={onClose}>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={isPlan ? 2 : 4} autoFocus={isNew}
+    <Sheet title={title} onClose={closeSaving}>
+      <AutoTextarea value={text} onChange={setText} minRows={isPlan ? 2 : 4} autoFocus={isNew} aria-label={title}
         placeholder={isPlan ? "Ej: Cena con Juan en lo de Sofi" : isIdea ? "Tu idea…" : "Tu nota…"}
-        style={{ ...FIELD, resize: "vertical", lineHeight: 1.5 }} />
+        style={{ lineHeight: 1.5 }} />
       {isPlan && (
         <div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -84,8 +97,13 @@ function NoteSheet({ note, onSave, onDelete, onToTask, onClose }) {
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {isNew
-          ? <button onClick={onClose} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>Cancelar</button>
-          : <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+          ? <button onClick={onClose} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>Descartar</button>
+          : confirmDel
+            ? <span style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => run(() => onDelete(note.id))} disabled={busy} style={{ ...DANGER_BTN, fontWeight: 600 }}>Sí, eliminar</button>
+                <button onClick={() => setConfirmDel(false)} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>No</button>
+              </span>
+            : <button onClick={() => setConfirmDel(true)} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
         {!isNew && !isPlan && (
           <button onClick={() => run(() => onSave({ archived: !note.archived }))} disabled={busy} style={GHOST_BTN}>
             {note.archived ? "Desarchivar" : "Archivar"}
@@ -224,10 +242,11 @@ function NotesList({ kind }) {
       </div>
 
       {!archived && (
-        <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "center" }}>
-          <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+        <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <AutoTextarea value={text} onChange={setText} maxRows={6}
+            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); add(); } }}
             placeholder={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"} aria-label={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"}
-            style={{ ...FIELD, borderRadius: 20, padding: "10px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
+            style={{ flex: 1, minWidth: 0, width: "auto", borderRadius: 20, padding: "9px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
           <button onClick={add} aria-label="Agregar" disabled={!text.trim()}
             style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center", opacity: text.trim() ? 1 : 0.35, transition: "opacity 0.2s" }}>

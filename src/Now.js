@@ -95,7 +95,8 @@ export default function NowView({ blocks, tasks, checkins, dayOverride, today, l
             <BlockHeader block={cur} nowMin={nowMin} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>Para ahora</div>
-              <Big key={task.id}><span className="view-in" style={{ display: "block" }}>{task.text}</span></Big>
+              <Big key={task.id}><span className="view-in" style={{ display: "block", whiteSpace: "pre-wrap" }}>{task.text}</span></Big>
+              {task.detail && <div style={{ fontSize: 16, color: "var(--ink-2)", lineHeight: 1.45, marginTop: 6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{task.detail}</div>}
               {task.scheduled_time && <div className="num" style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 6 }}>a las {hhmm(task.scheduled_time)}</div>}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

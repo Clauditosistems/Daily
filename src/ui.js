@@ -1,5 +1,5 @@
 // Constantes, helpers y estilos compartidos entre pantallas.
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 // Colores por tipo: variables de theme.css (cambian con el modo oscuro). bg = tinte suave sobre la superficie.
 const typeColor = k => ({ color: `var(--t-${k})`, bg: `color-mix(in srgb, var(--t-${k}) 13%, var(--surface))` });
@@ -116,6 +116,8 @@ const ICONS = {
   right: ["M9 18l6-6-6-6"],
   check: ["M20 6L9 17l-5-5"],
   plus: ["M12 5v14", "M5 12h14"],
+  close: ["M18 6L6 18", "M6 6l12 12"],
+  down: ["M6 9l6 6 6-6"],
 };
 
 export function Icon({ name, size = 22, stroke = 1.8, style }) {
@@ -241,7 +243,33 @@ export function Segmented({ options, value, onChange, label }) {
   );
 }
 
+// ─── TEXTO DE VARIAS LÍNEAS ──────────────────────────────────
+// Texto plano: Enter hace salto de línea y el campo crece con lo escrito (hasta maxRows; después scrollea).
+export function AutoTextarea({ value, onChange, minRows = 1, maxRows = 0, style, onKeyDown, ...rest }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight) || 23;
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    el.style.height = "auto";
+    const content = el.scrollHeight + border;               // scrollHeight ya incluye el padding
+    const min = minRows * lh + pad + border;
+    const max = maxRows ? maxRows * lh + pad + border : Infinity;
+    el.style.height = `${Math.min(Math.max(content, min), max)}px`;
+    el.style.overflowY = content > max ? "auto" : "hidden";
+  }, [value, minRows, maxRows]);
+  return (
+    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} rows={minRows} onKeyDown={onKeyDown}
+      style={{ ...FIELD, resize: "none", lineHeight: 1.45, display: "block", flexShrink: 0, ...style }} {...rest} />
+  );
+}
+
 // ─── HOJA (bottom sheet) ─────────────────────────────────────
+// Se cierra tocando afuera, con la cruz o con "atrás"; todas pasan por onClose
+// (las hojas de edición guardan lo escrito ahí mismo).
 export function Sheet({ title, onClose, children }) {
   useBackHandler(true, onClose);
   return (
@@ -250,7 +278,14 @@ export function Sheet({ title, onClose, children }) {
         style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: "10px 20px calc(28px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 520,
           boxShadow: "var(--shadow-float)", maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, boxSizing: "border-box" }}>
         <div style={{ width: 36, height: 5, background: "var(--surface-3)", borderRadius: 3, margin: "0 auto 2px" }} />
-        <div style={TITLE}>{title}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ ...TITLE, flex: 1, minWidth: 0 }}>{title}</div>
+          <button onClick={onClose} aria-label="Cerrar"
+            style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "var(--surface-2)", color: "var(--ink-2)", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>
+            <Icon name="close" size={16} stroke={2.4} />
+          </button>
+        </div>
         {children}
       </div>
     </div>

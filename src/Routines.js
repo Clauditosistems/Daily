@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchRoutines, createRoutine, updateRoutine, deleteRoutine } from "./supabase";
 import {
   BLOCK_TYPE, TASK_TYPES, DAYS, PRIO, todayStr, hhmm,
-  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Toggle
+  FIELD, LABEL, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Toggle, AutoTextarea
 } from "./ui";
 
 function daysLabel(days) {
@@ -23,6 +23,7 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
   const [time, setTime]           = useState(hhmm(routine?.scheduled_time));
   const [error, setError]         = useState("");
   const [busy, setBusy]           = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   const toggleDay = d => setDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
 
@@ -44,7 +45,10 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
 
   return (
     <Sheet title={isNew ? "Nueva rutina" : "Editar rutina"} onClose={onClose}>
-      <input value={text} onChange={e => setText(e.target.value)} placeholder="Ej: Estudiar 1h" style={FIELD} autoFocus={isNew} />
+      <AutoTextarea value={text} onChange={setText} placeholder="Ej: Ir a la feria" aria-label="Nombre de la rutina" autoFocus={isNew} />
+      <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: -10, lineHeight: 1.45 }}>
+        Un nombre general. Lo específico de cada día va en el detalle de esa tarea.
+      </div>
       <div>
         <div style={LABEL}>Se repite</div>
         <DayPicker value={days} onToggle={toggleDay} />
@@ -68,11 +72,16 @@ function RoutineSheet({ routine, onSave, onDelete, onClose }) {
         </div>
       )}
       <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
-        La tarea aparece sola en la agenda los días elegidos, desde hoy. Los cambios se aplican a las tareas pendientes de hoy en adelante.
+        La tarea aparece sola en la agenda los días elegidos, desde hoy. Los cambios se aplican a las tareas pendientes de hoy en adelante, salvo lo que hayas cambiado en un día puntual: eso se respeta.
       </div>
       {error && <div style={ERROR_BOX}>{error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        {!isNew && <button onClick={remove} disabled={busy} style={DANGER_BTN}>Eliminar</button>}
+        {!isNew && (confirmDel
+          ? <span style={{ display: "flex", gap: 4 }}>
+              <button onClick={remove} disabled={busy} style={{ ...DANGER_BTN, fontWeight: 600 }}>Sí, eliminar</button>
+              <button onClick={() => setConfirmDel(false)} style={{ ...TEXT_BTN, color: "var(--ink-2)" }}>No</button>
+            </span>
+          : <button onClick={() => setConfirmDel(true)} disabled={busy} style={DANGER_BTN}>Eliminar</button>)}
         <button onClick={onClose} style={{ ...TEXT_BTN, flex: 1, color: "var(--ink-2)" }}>Cancelar</button>
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Guardar"}</button>
       </div>

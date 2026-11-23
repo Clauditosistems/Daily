@@ -6,7 +6,10 @@ import { addDays, parseYmd } from "./ui";
 const SUPABASE_URL      = "https://rtpqdivjgrykwwbnsksw.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0cHFkaXZqZ3J5a3d3Ym5za3N3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNDkyNTEsImV4cCI6MjEwNTkyNTI1MX0.N5K0XIg2vMJYJm24wCxTcSWe7APBgjB00HIdlT4GXSU";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// REACT_APP_MOCK=1 (solo desarrollo): datos de ejemplo en memoria, sin tocar la base real.
+export const supabase = process.env.REACT_APP_MOCK === "1"
+  ? require("./dev/mockSupabase").mockSupabase
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── AUTH ────────────────────────────────────────────────────
 export async function sendMagicLink(email) {
@@ -149,6 +152,53 @@ export async function deleteTask(id) {
   if (error) throw error;
 }
 
+export async function fetchTask(id) {
+  const { data, error } = await supabase.from("tasks").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data;
+}
+
+// ─── SUBTAREAS ───────────────────────────────────────────────
+// Un solo nivel. La base mantiene sincronizada la tarea: última subtarea hecha → tarea hecha;
+// desmarcar una → se reabre; tarea hecha → todas sus subtareas hechas.
+const bySubOrder = (a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at);
+
+// { [task_id]: [subtareas ordenadas] }
+export async function fetchSubtasks(taskIds) {
+  if (!taskIds.length) return {};
+  const { data, error } = await supabase.from("subtasks").select("*").in("task_id", taskIds);
+  if (error) throw error;
+  const map = {};
+  data.sort(bySubOrder).forEach(s => { (map[s.task_id] = map[s.task_id] || []).push(s); });
+  return map;
+}
+
+export async function updateSubtask(id, changes) {
+  const { data, error } = await supabase.from("subtasks").update(changes).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// Aplica los cambios hechos en el editor de la tarea: agrega, edita (texto/hecha/orden) y quita.
+export async function saveSubtasks(taskId, before, after) {
+  const prev = Object.fromEntries(before.map(s => [s.id, s]));
+  const keep = new Set(after.filter(s => s.id).map(s => s.id));
+  const removed = before.filter(s => !keep.has(s.id)).map(s => s.id);
+  if (removed.length) {
+    const { error } = await supabase.from("subtasks").delete().in("id", removed);
+    if (error) throw error;
+  }
+  for (const [i, s] of after.entries()) {
+    if (!s.id) {
+      const { error } = await supabase.from("subtasks").insert({ task_id: taskId, text: s.text, done: s.done, position: i });
+      if (error) throw error;
+    } else {
+      const p = prev[s.id];
+      if (p && (p.text !== s.text || p.done !== s.done || p.position !== i)) await updateSubtask(s.id, { text: s.text, done: s.done, position: i });
+    }
+  }
+}
+
 // ─── RUTINAS ─────────────────────────────────────────────────
 export async function fetchRoutines() {
   const { data, error } = await supabase.from("routines").select("*").order("created_at");
@@ -162,16 +212,24 @@ export async function createRoutine(routine) {
   return data;
 }
 
-// Los cambios también se aplican a las instancias pendientes de hoy en adelante.
+// Los cambios se aplican a las instancias pendientes de hoy en adelante, pero la plantilla
+// nunca pisa una tarea ya creada: cada campo se actualiza solo donde todavía tiene el valor
+// de la plantilla anterior (si lo cambiaste en ese día, se respeta). El detalle nunca se toca.
 export async function updateRoutine(id, changes, today) {
+  const { data: old, error: e0 } = await supabase.from("routines").select("*").eq("id", id).single();
+  if (e0) throw e0;
   // Se regenera desde hoy para que los días agregados tengan su instancia.
   const { data, error } = await supabase.from("routines")
     .update({ ...changes, generated_until: addDays(today, -1) }).eq("id", id).select().single();
   if (error) throw error;
-  const { error: e2 } = await supabase.from("tasks")
-    .update({ text: data.text, block_type: data.block_type, prio: data.prio, scheduled_time: data.scheduled_time })
-    .eq("routine_id", id).eq("done", false).gte("assigned_date", today);
-  if (e2) throw e2;
+  for (const field of ["text", "block_type", "prio", "scheduled_time"]) {
+    if (old[field] === data[field]) continue;
+    let q = supabase.from("tasks").update({ [field]: data[field] })
+      .eq("routine_id", id).eq("done", false).gte("assigned_date", today);
+    q = old[field] === null ? q.is(field, null) : q.eq(field, old[field]);
+    const { error: e2 } = await q;
+    if (e2) throw e2;
+  }
   // Días que dejaron de aplicar (o rutina pausada): se borran sus instancias futuras pendientes.
   const removed = [0, 1, 2, 3, 4, 5, 6].filter(d => !data.active || !data.days_of_week.includes(d));
   if (removed.length) await deleteFutureInstances(id, today, removed);
@@ -184,12 +242,16 @@ export async function deleteRoutine(id, today) {
   if (error) throw error;
 }
 
+// Borra las instancias futuras pendientes que siguen siendo "de plantilla". Las que tienen
+// detalle o subtareas tienen algo tuyo: esas se quedan (desvinculadas de la rutina si se borra).
 async function deleteFutureInstances(routineId, today, weekdays = null) {
-  const { data, error } = await supabase.from("tasks").select("id, assigned_date")
+  const { data, error } = await supabase.from("tasks").select("id, assigned_date, detail")
     .eq("routine_id", routineId).eq("done", false).gte("assigned_date", today);
   if (error) throw error;
+  const subs = await fetchSubtasks(data.map(t => t.id));
   const ids = data
     .filter(t => !weekdays || weekdays.includes(parseYmd(t.assigned_date).getDay()))
+    .filter(t => !(t.detail && t.detail.trim()) && !subs[t.id])
     .map(t => t.id);
   if (!ids.length) return;
   const { error: e2 } = await supabase.from("tasks").delete().in("id", ids);

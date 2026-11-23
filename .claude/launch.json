@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daily-mock",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set REACT_APP_MOCK=1&& set BROWSER=none&& set PORT=3100&& npx react-scripts start"],
+      "port": 3100
+    }
+  ]
+}
