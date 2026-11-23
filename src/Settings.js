@@ -102,7 +102,7 @@ function NotificationPrefs() {
 }
 
 const TABLE_LABEL = {
-  settings: "configuración", weekly_blocks: "bloques", routines: "rutinas", tasks: "tareas",
+  settings: "configuración", weekly_blocks: "bloques", routines: "rutinas", tasks: "tareas", subtasks: "subtareas", events: "eventos",
   block_overrides: "cambios de bloques", day_overrides: "días atípicos", block_checkins: "\"estuve\"",
   notes: "notas", birthdays: "cumpleaños", weekly_summaries: "resúmenes", push_subscriptions: "dispositivos", push_log: "avisos enviados",
 };

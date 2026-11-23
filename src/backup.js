@@ -14,6 +14,8 @@ const TABLES = [
   { name: "weekly_blocks",      restore: true },
   { name: "routines",           restore: true },
   { name: "tasks",              restore: true },
+  { name: "subtasks",           restore: true },
+  { name: "events",             restore: true },
   { name: "block_overrides",    restore: true },
   { name: "day_overrides",      restore: true },
   { name: "block_checkins",     restore: true },
