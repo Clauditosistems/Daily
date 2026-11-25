@@ -5,7 +5,7 @@ import {
 } from "./supabase";
 import {
   hhmm, parseYmd, todayStr, addDays, birthdayOn,
-  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented, AutoTextarea
+  FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, ERROR_BOX, Sheet, DANGER_BTN, TEXT_BTN, Group, Row, Icon, ScreenTitle, Segmented, AutoTextarea, NewItemBar
 } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -148,7 +148,6 @@ function NotesList({ kind }) {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
   const [sheet, setSheet]       = useState(null);
-  const [text, setText]         = useState("");
   const [notice, setNotice]     = useState("");
   const today = todayStr();
 
@@ -166,13 +165,6 @@ function NotesList({ kind }) {
       : fetchNotes(kind, archived);
     load.then(setNotes).catch(err => setError(err.message)).finally(() => setLoading(false));
   }, [kind, archived]);  // eslint: inView/sortPlans dependen solo de kind, archived y today
-
-  async function add() {
-    if (!text.trim()) return;
-    if (isPlan) { setSheet({ kind: "plan", text: text.trim(), note_date: addDays(today, 1) }); setText(""); return; }
-    try { const n = await createNote({ kind, text: text.trim() }); setNotes(p => [n, ...p]); setText(""); }
-    catch (err) { setError(err.message); }
-  }
 
   async function save(changes) {
     const saved = sheet.id ? await updateNote(sheet.id, changes) : await createNote({ kind, ...changes });
@@ -242,17 +234,8 @@ function NotesList({ kind }) {
       </div>
 
       {!archived && (
-        <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <AutoTextarea value={text} onChange={setText} maxRows={6}
-            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); add(); } }}
-            placeholder={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"} aria-label={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"}
-            style={{ flex: 1, minWidth: 0, width: "auto", borderRadius: 20, padding: "9px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
-          <button onClick={add} aria-label="Agregar" disabled={!text.trim()}
-            style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center", opacity: text.trim() ? 1 : 0.35, transition: "opacity 0.2s" }}>
-            <Icon name="arrowUp" size={20} stroke={2.4} />
-          </button>
-        </div>
+        <NewItemBar label={isPlan ? "Nuevo plan" : isIdea ? "Nueva idea" : "Nueva nota"}
+          onOpen={() => setSheet(isPlan ? { kind: "plan", note_date: addDays(today, 1) } : { kind })} />
       )}
 
       {sheet && <NoteSheet key={sheet.id || "new"} note={sheet} onSave={save} onDelete={remove} onToTask={toTask} onClose={() => setSheet(null)} />}

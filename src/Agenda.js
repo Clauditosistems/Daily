@@ -17,7 +17,7 @@ import {
 import {
   BLOCK_TYPE, TASK_TYPES, PRIO, haptic, hhmm, toMinutes, parseYmd, ymd, todayStr, addDays, weekDates, dayTitle, birthdayOn,
   FIELD, LABEL, CHIP, PRIMARY_BTN, GHOST_BTN, TEXT_BTN, ERROR_BOX, SECTION, CARD, LARGE_TITLE, Icon, Toggle,
-  Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN, AutoTextarea
+  Sheet, BlockTypePicker, PrioPicker, DayPicker, DANGER_BTN, AutoTextarea, NewItemBar
 } from "./ui";
 
 // ─── TIRA SEMANAL ────────────────────────────────────────────
@@ -199,7 +199,7 @@ function TaskSheet({ task, initialBlocks, initialSubs = [], onSave, onDelete, on
           onMove={async d => { await onSave({ assigned_date: d, block_id: null, rollover_count: 0 }); onClose(); }}
           onRelease={async () => { await onDelete(task.id); onClose(); }} />
       )}
-      <AutoTextarea value={text} onChange={setText} minRows={1} autoFocus={isNew}
+      <AutoTextarea value={text} onChange={setText} minRows={isNew ? 3 : 1} autoFocus={isNew}
         placeholder="¿Qué hay que hacer?" aria-label="Tarea" style={{ fontSize: 17, fontWeight: 500 }} />
       <div>
         <div style={LABEL}>Detalle (opcional)</div>
@@ -406,41 +406,6 @@ function AtypicalSheet({ date, onDone, onClose }) {
         <button onClick={save} disabled={busy} style={{ ...PRIMARY_BTN, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Guardando…" : "Marcar atípico"}</button>
       </div>
     </Sheet>
-  );
-}
-
-// ─── BARRA PARA AGREGAR RÁPIDO ───────────────────────────────
-function Composer({ types, onAdd }) {
-  const [text, setText] = useState("");
-  const [blockType, setBlockType] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  async function send() {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    try { await onAdd(text.trim(), blockType); setText(""); }
-    finally { setBusy(false); }
-  }
-
-  return (
-    <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-      {types.length > 0 && text.trim() && (
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
-          <BlockTypePicker value={blockType} onChange={setBlockType} allowNone types={types} />
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-        <AutoTextarea value={text} onChange={setText} maxRows={6}
-          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
-          placeholder="Nueva tarea" aria-label="Nueva tarea para este día"
-          style={{ flex: 1, minWidth: 0, width: "auto", borderRadius: 20, padding: "9px 16px", background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)" }} />
-        <button onClick={send} disabled={busy || !text.trim()} aria-label="Agregar"
-          style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center", opacity: busy || !text.trim() ? 0.35 : 1, transition: "opacity 0.2s" }}>
-          <Icon name="arrowUp" size={20} stroke={2.4} />
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -677,14 +642,6 @@ export default function AgendaView({ forceMode }) {
     refreshCounts();
   }
 
-  async function quickAdd(text, blockType) {
-    try {
-      const saved = await createTask({ text, assigned_date: selected, block_type: blockType });
-      applyTask(saved);
-      refreshCounts();
-    } catch (err) { setError(err.message); }
-  }
-
   async function saveEventSheet(payload) {
     const saved = await saveEvent(eventSheet.id, payload);
     setEvents(p => [...p.filter(e => e.id !== saved.id), saved]);
@@ -717,7 +674,6 @@ export default function AgendaView({ forceMode }) {
   const shownTasks = visibleTasks(tasks, today);
   const { inBlock, loose } = placeTasks(blocks, shownTasks);
   const nowMin = nowMinutes();
-  const typesToday = [...new Set(blocks.map(b => b.block_type))].filter(k => k !== "ocio");
   const isToday = selected === today;
   const year = parseYmd(selected).getFullYear();
   const dayBirthdays = birthdays.filter(b => birthdayOn(b.month, b.day, year) === selected);
@@ -888,7 +844,9 @@ export default function AgendaView({ forceMode }) {
 
       )}
 
-      {(mode === "dia" || mode === "linea") && <Composer key={`composer-${selected}`} types={typesToday} onAdd={quickAdd} />}
+      {(mode === "dia" || mode === "linea") && (
+        <NewItemBar label="Nueva tarea" onOpen={() => setSheet({ assigned_date: selected, prio: "mid", block_type: null, block_id: null })} />
+      )}
 
       {sheet && (
         <TaskSheet key={sheet.id || "new"} task={sheet} initialBlocks={sheet.assigned_date === selected ? blocks : null}

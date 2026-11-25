@@ -267,6 +267,25 @@ export function AutoTextarea({ value, onChange, minRows = 1, maxRows = 0, style,
   );
 }
 
+// ─── BARRA "NUEVA …" ─────────────────────────────────────────
+// Parece un campo, pero al tocarla abre el editor completo (varias líneas); al cerrarlo se guarda lo escrito.
+export function NewItemBar({ label, onOpen }) {
+  return (
+    <div className="glass" style={{ borderTop: "0.5px solid var(--border)", padding: "10px 12px", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+      <button onClick={onOpen} aria-label={label}
+        style={{ ...FIELD, flex: 1, minWidth: 0, width: "auto", textAlign: "left", cursor: "text", borderRadius: 20, padding: "10px 16px",
+          background: "var(--surface)", boxShadow: "inset 0 0 0 0.5px var(--border)", color: "var(--ink-3)" }}>
+        {label}
+      </button>
+      <button onClick={onOpen} aria-label={`${label}: abrir`} tabIndex={-1}
+        style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon name="plus" size={20} stroke={2.4} />
+      </button>
+    </div>
+  );
+}
+
 // ─── HOJA (bottom sheet) ─────────────────────────────────────
 // Se cierra tocando afuera, con la cruz o con "atrás"; todas pasan por onClose
 // (las hojas de edición guardan lo escrito ahí mismo).
